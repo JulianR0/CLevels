@@ -34,7 +34,7 @@ Si decides compilar y utilizar los codigos para tu propio uso tendras que invent
 ## Instrucciones de compilacion/instalacion
 La compilacion de los diferentes archivos del proyecto se realizan de tarea manual con los siguientes pasos:
 
-- Plugins AngelScript (Extension .as):
+### Plugins AngelScript (Extension .as):
 Para compilar estos plugins solo basta con subir los nuevos archivos al servidor, cuya ubicacion es **svencoop/scripts/plugins**. Hecho eso se debe editar el archivo **default_plugins.txt** ubicado en la carpeta **svencoop** BASE. Y agregar nuestro plugin a la lista, esto solo se hace una vez, y estas nuevas entradas en la lista se deben ver de la siguiente manera:
 
 ```
@@ -57,7 +57,7 @@ Dare enfasis a las palabras **consola del servidor**, si estas usando un dedicad
 
 Si la compilacion falla, los errores seran mostrados en la consola o bien en los logs del servidor, ubicado en **svencoop/logs/Angelscript** para su facil acceso.
 
-- Plugins AMXX (Extension .sma):
+### Plugins AMXX (Extension .sma):
 El codigo de estos plugins fue escrito en AMXX 1.8.3 (Ahora 1.9). Debes descargar/instalar esas versiones experimentales del AMXX para poder compilarlos.
 
 Hecho eso, copiamos nuestro archivo .sma a **addons/amxmodx/scripting**. Ahora, debemos ejecutar una linea de comandos en el simbolo de sistema. Asegurate que la terminal este apuntando al directorio mencionado anteriormente y ejecuta el siguiente comando: **amxxpc.exe CLevels_Helper.sma** o bien **amxxpc.exe MysteryGift.sma**. Si la compilacion es existosa, el programa creara su fichero compilado con extension **.amxx**. Este nuevo archivo es subido al servidor, en **addons/amxmodx/plugins**. Finalmente agregamos estos nuevos plugins a la lista de plugins AMXX, cuyo archivo de configuracion **plugins.ini** se encuentra en **addons/amxmodx/config**. Solo nos vamos al final del fichero y agregamos dos lineas, que seran CLevels_Helper.amxx y MysteryGift.amxx. Hecho! Si queremos recompilar los plugins solo modificamos el archivo .sma, compilamos y copiamos el nuevo archivo .amxx al servidor. -*Todos los cambios que realizemos solo tomaran efecto al cambiar de mapa*-.
