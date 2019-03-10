@@ -65,6 +65,18 @@ Dare enfasis a las palabras **consola del servidor**, si estas usando un dedicad
 
 Si la compilacion falla, los errores seran mostrados en la consola o bien en los logs del servidor, ubicado en **svencoop/logs/Angelscript** para su facil acceso.
 
+**_IMPORTANTE_**
+El proyecto no guardara ningun dato -*y cerrara el servidor a la fuerza!*- inicialmente hasta que sus carpetas de almacenamiento esten creadas y haya acceso de lectura/escritura en ellas. Ve a la carpeta **svencoop/scripts/plugins/store** y crea los siguientes directorios cuyos propositos son los siguientes:
+
+- **cp_data**: Puntos Cosmeticos del jugador, junto con guardados adicionales como glow personalizado.
+- **scxpm_achievement**: Logros de los jugadores.
+- **scxpm_backup**: *EXPERIMENTAL:* Copias de resguardo de la mayoria de los datos de los jugadores.
+- **scxpm_data**: Niveles, habilidades, y otros datos de los jugadores. De suma importancia para el plugin principal.
+- **scxpm_event**: Administrador de eventos. De uso interno del sistema.
+- **scxpm_logs**: Registros, aqui se mostraran fecha y hora de los ultimos acontecimientos de los jugadores/administradores.
+- **scxpm_permaincrease**: Modificadores de EXP de los jugadores.
+- **scxpm_post**: Post-Game. Carpeta contenedora de datos para jugadores que hayan terminado el SCXPM al 100%.
+
 ### Plugins AMXX (Extension .sma):
 El codigo de estos plugins fue escrito en AMXX 1.8.3 (Ahora 1.9). Debes descargar/instalar esas versiones experimentales del AMXX para poder compilarlos.
 
