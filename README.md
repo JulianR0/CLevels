@@ -21,11 +21,13 @@ Este proyecto se maneja con los siguientes archivos:
 
 1. **CLevels.as**
    - Este es el plugin SCXPM principal. La mayoria de sus funciones se encuentran aqui y son independientes, si los plugins adicionales no pueden correr, el SCXPM puede aun seguir ejecutandose para los jugadores, aunque con funcionabilidad limitada.
-2. **CLevels_Helper.sma**
+2. **CLevels_AHandler.as**
+   - Este plugin se encarga de la mayoria de los logros implementados en el SCXPM. Su funcion es ayudar a la auto-deteccion de los objetivos escritos en el plugin principal. De esta manera, los jugadores pueden desbloquear logros por si solos sin necesidad de un admininistrador que los desbloquie de manera manual.
+3. **CLevels_Helper.sma**
    - Este es un plugin auxiliar para asistir en las funciones del SCXPM. La mayoria de sus funciones son proveer de metodos de auto-deteccion de logros para que los jugadores puedan desbloquearlos. Pero este plugin tambien dispone de tres utilidades adicionales, que son la eliminacion de entidades no deseadas en los mapas y la eliminacion de cualquier puntaje adquirido al reparar torretas aliadas. Estos dos son para evitar que los jugadores se aprovechen de defectos del juego y/o del SCXPM en si para adquirir EXP facil. Mientras que la tercera y ultima utilidad es la eliminacion de cualquier entidad "anti-scxpm" que ajuste el daño de los enemigos. Si bien pensar asi no es inapropiado, no corresponde con nuestro SCXPM. La mayoria de SCXPM's alla afuera te permiten tener **600**+ vida/armadura. **TIENE SENTIDO** en esos casos. Pero en mi SCXPM el valor maximo que se puede alcanzar es de aproximadamente **250**. Sufrir daño elevado por un pequeño aumento de vida/armadura hace los mapas demasiado injustos e insoportables.
-3. **MysteryGift.sma**
+4. **MysteryGift.sma**
    - Plugin encargado de manejar todas las tareas realizadas a "Mystery Gift"/Regalo Misterioso. Este plugin originalmente fue escrito para funcionar en todos los servidores, pero por problemas de presopuesto solo fue programado en el servidor SCXPM, con recompensas y funciones *hardcodeados* dentro de esta.
-4. **CP_System.as**
+5. **CP_System.as**
    - Plugin de cosmetica. En este se encuentran los sistemas de Glow, Trail, Hats, y Fireworks. En adicion a funciones adicionales que son compartidas por el plugin principal y Mystery Gift. Los fireworks en este plugin se encuentran 100% programados y funcionales, sin embargo han sido desactivados en el codigo, ya que los fireworks fueron creados para utilizarse en eventos especiales. -*Por ejemplo: Cumpleaños de la comunidad*-
 ## Una nota sobre los archivos
 El proyecto solamente contendra el codigo fuente, no provere de los sonidos/models/sprites o cualquier otro archivo adicional que el proyecto utiliza en su codigo. Y solicito que por favor se mantenga asi, aunque estoy abierto a negociar esta regla.
@@ -46,12 +48,18 @@ Para compilar estos plugins solo basta con subir los nuevos archivos al servidor
 
 "plugin"
 {
+  "name" "SCXPM_AHandler"
+  "script" "CLevels_AHandler"
+}
+
+"plugin"
+{
   "name" "CP"
   "script" "CP_System"
 }
 ```
 
-Finalmente, vamos a la consola del servidor y escribimos el comando **as_reloadplugins** para recompilar todos los plugins de la lista. -*Es posible que sea necesario cambiar el mapa para que la compilacion se lleve a cabo*-. Si solamente queremos recompilar un solo plugin de esta lista, entonces escribimos el comando **as_reloadplugin "SCXPM"** para el plugin principal o bien **as_reloadplugin "CP"** para la cosmetica.
+Finalmente, vamos a la consola del servidor y escribimos el comando **as_reloadplugins** para recompilar todos los plugins de la lista. -*Es posible que sea necesario cambiar el mapa para que la compilacion se lleve a cabo*-. Si solamente queremos recompilar un solo plugin de esta lista, entonces escribimos el comando **as_reloadplugin "SCXPM"** para el plugin principal, **as_reloadplugin "SCXPM_AHandler"** para el plugin de logros, o bien **as_reloadplugin "CP"** para la cosmetica.
 
 Dare enfasis a las palabras **consola del servidor**, si estas usando un dedicado escribir los comandos "asinomas" no tendra efecto alguno, deberas escribir los comandos desde **RCON** para que sean enviados al servidor.
 
