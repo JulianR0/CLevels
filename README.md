@@ -55,10 +55,26 @@ Finalmente, vamos a la consola del servidor y escribimos el comando **as_reloadp
 
 Dare enfasis a las palabras **consola del servidor**, si estas usando un dedicado escribir los comandos "asinomas" no tendra efecto alguno, deberas escribir los comandos desde **RCON** para que sean enviados al servidor.
 
-- Plugins AMXX (Extension .sma)
+Si la compilacion falla, los errores seran mostrados en la consola o bien en los logs del servidor, ubicado en **svencoop/logs/Angelscript** para su facil acceso.
 
-El codigo de estos plugins fue escrito en AMXX 1.8.3 (Ahora 1.9). Debes descargar esas versiones experimentales del AMXX para poder compilarlos.
-#
-Pero bueno, suficiente escribiendo y hacer este archivo README.md mas largo de lo que deberia, todo esto es libre. Adelante, explora, modifica, utiliza. Tal vez podamos trabajar juntos en mejorar este SCXPM asquerosamente escrito -*ya lo notaras cuando examines su codigo*-. E inclusive mejorar este README ya que estamos en ello, no?
+- Plugins AMXX (Extension .sma):
+El codigo de estos plugins fue escrito en AMXX 1.8.3 (Ahora 1.9). Debes descargar/instalar esas versiones experimentales del AMXX para poder compilarlos.
+
+Hecho eso, copiamos nuestro archivo .sma a **addons/amxmodx/scripting**. Ahora, debemos ejecutar una linea de comandos en el simbolo de sistema. Asegurate que la terminal este apuntando al directorio mencionado anteriormente y ejecuta el siguiente comando: **amxxpc.exe CLevels_Helper.sma** o bien **amxxpc.exe MysteryGift.sma**. Si la compilacion es existosa, el programa creara su fichero compilado con extension **.amxx**. Este nuevo archivo es subido al servidor, en **addons/amxmodx/plugins**. Finalmente agregamos estos nuevos plugins a la lista de plugins AMXX, cuyo archivo de configuracion **plugins.ini** se encuentra en **addons/amxmodx/config**. Solo nos vamos al final del fichero y agregamos dos lineas, que seran CLevels_Helper.amxx y MysteryGift.amxx. Hecho! Si queremos recompilar los plugins solo modificamos el archivo .sma, compilamos y copiamos el nuevo archivo .amxx al servidor. -*Todos los cambios que realizemos solo tomaran efecto al cambiar de mapa*-.
+
+Si no queremos utilizar el simbolo del sistema puedes crear un archivo **.bat** para simplificar la tarea. Que puede armarse de la manera siguiente: Crea un archivo .bat en **addons/amxmodx/scripting**, edita su contenido y agrega las siguientes lineas:
+
+```
+@echo off
+amxxpc.exe CLevels_Helper.sma
+amxxpc.exe MysteryGift.sma
+pause
+```
+
+Cuando quieras recompilar los plugins, copia los nuevos .sma a la carpeta, ejecuta el .bat, y si la compilacion es exitosa tendras tus nuevos .amxx para utilizar.
+
+Lamentablemente si las compilaciones fallan, estos no son exportados a un archivo .log el cual poder inspeccionar, deberas leer la ventana de la terminal para identificar y corregir fallos que se presenten. No obstante, si tienes buen conocimiento de los archivos .bat puedes editar las lineas y exportar manualmente el proceso de compilacion a un archivo para que sus errores sean legibles ahi.
+# Finalizando
+Suficiente escribiendo y haciendo este archivo README.md mas largo de lo que deberia, todo esto es libre. Adelante, explora, modifica, utiliza. Tal vez podamos trabajar juntos en mejorar este SCXPM asquerosamente escrito -*ya lo notaras cuando examines su codigo*-. E inclusive mejorar este README ya que estamos en ello, no?
 
 Good luck, and have fun!
