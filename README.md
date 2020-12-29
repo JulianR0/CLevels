@@ -1,3 +1,13 @@
+# THIS BRANCH IS NO LONGER SUPPORTED
+
+This old "v2" version of SCXPM has been made obsolete. It is kept here for archival purposes.
+
+# ESTA VERSION YA NO RECIBIRA SOPORTE
+
+Esta vieja version "v2" del SCXPM se ha vuelto obsoleta. Es conservado aqui para propositos de archivacion.
+
+---
+
 # CLevels
 Plugin SCXPM utilizado en los servidores de Imperium Sven Co-op.
 ## Que es esto?
