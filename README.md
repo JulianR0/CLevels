@@ -14,7 +14,7 @@ But that's all in the past, devs are cool now. Give them a hug, they need it.
 
 I would love to tell you more but you'll grow bored.
 ## Getting started
-For server operators, I built a barebones wiki containing instalation instructions, and how to configure it.
+For server operators, I built a barebones wiki containing instalation instructions, and how to configure it. The wiki is located here: https://github.com/JulianR0/CLevels/wiki
 
 For casual players, the chat command `/menu` should provide you with all of your needs. A `/help` chat command displaying all commands is also available.
 ## Why is this repository called "CLevels"?
