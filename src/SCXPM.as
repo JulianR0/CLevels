@@ -16,8 +16,8 @@
 	along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const string version = "v3.14";
-const string lastupdate = "December 29th, 2020";
+const string version = "v3.20";
+const string lastupdate = "August 28th, 2021";
 
 const string PATH_MAIN_DATA = "scripts/plugins/store/scxpm/data/";
 const string PATH_PERMAINCREASE_DATA = "scripts/plugins/store/scxpm/permaincrease/";
@@ -262,6 +262,12 @@ int AMMO_SNIPER;
 int AMMO_SPORE;
 int AMMO_ROACH;
 
+array< bool > bMainDataExists( 33 );
+array< string > g_MainVaultData;
+array< bool > bAchievementDataExists( 33 );
+array< string > g_AchievementVaultData;
+bool bVaultsReady;
+
 dictionary pmenu_state;
 class MenuHandler
 {
@@ -363,6 +369,9 @@ void MapInit()
 			aData[ i ][ j ] = false;
 			aClaim[ i ][ j ] = false;
 		}
+		
+		bMainDataExists[ i ] = false;
+		bAchievementDataExists[ i ] = false;
 	}
 	
 	array< string >@ states = pmenu_state.getKeys();
@@ -441,6 +450,11 @@ void MapInit()
 	}
 	
 	g_Scheduler.SetTimeout( "scxpm_block_handicaps", 70.0 );
+	
+	// Initialize vaults
+	bVaultsReady = false;
+	if ( !gDisabled )
+		InitVaults();
 }
 
 void MapActivate()
@@ -488,6 +502,8 @@ HookReturnCode ClientPutInServer( CBasePlayer@ pPlayer )
 	
 	lastfrags[ index ] = 0.0;
 	lastDeadflag[ index ] = 123;
+	bMainDataExists[ index ] = false;
+	bAchievementDataExists[ index ] = false;
 	loaddata[ index ] = false;
 	
 	scxpm_loaddata( index );
@@ -560,6 +576,8 @@ HookReturnCode ClientDisconnect( CBasePlayer@ pPlayer )
 	}
 	
 	loaddata[ index ] = false;
+	bMainDataExists[ index ] = false;
+	bAchievementDataExists[ index ] = false;
 	
 	return HOOK_CONTINUE;
 }
@@ -1479,7 +1497,7 @@ void scxpm_setadata( const CCommand@ pArgs )
 				g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") edited achievement data to " + tname + " (" + tsteamid + ") | " + szFixedName + " [" + ( iUnlock >= 1 ? "UNLOCK" : "LOCK" ) + "]" + "[" + ( iReward >= 1 ? "WITH REWARD" : "WITHOUT REWARD" ) + "].\n" );
 				SCXPM_Log( aname + " (" + asteamid + ") edited achievement data to " + tname + " (" + tsteamid + ") | " + szFixedName + " [" + ( iUnlock >= 1 ? "UNLOCK" : "LOCK" ) + "]" + "[" + ( iReward >= 1 ? "WITH REWARD" : "WITHOUT REWARD" ) + "].\n" );
 				
-				scxpm_saveachievement( index );
+				//scxpm_saveachievement( index );
 				
 				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Player's achievement data updated\n" );
 				
@@ -2322,7 +2340,6 @@ void scxpm_reexp()
 			earnedxp[ i ] = floatround( earnvar * 5.0 * ( exp * ( expamp[ i ] + 1 ) ) );
 			
 			scxpm_savedata( i );
-			scxpm_saveachievement( i );
 			scxpm_checkachievement( i );
 			lastfrags[ i ] = pPlayer.pev.frags;
 			
@@ -5548,7 +5565,7 @@ void scxpm_achievements( const int& in index, int& in iPage = 0, int& in iInspec
 	
 	state.InitMenu( pPlayer, scxpm_achievements_cb );
 	
-	string title = "Achievements\n\n[-] = Locked\n[U] = Unlocked\n\n";
+	string title = "Achievements\n\n\\d[-]\\w = Locked\n\\y[U]\\w = Unlocked\n\n";
 	state.menu.SetTitle( title );
 	
 	if ( iInspect > 0 )
@@ -5883,244 +5900,323 @@ void DailyReward( const int& in index, int& in iDays, bool bUpdate, string& out 
 
 void scxpm_savedata( const int& in index )
 {
-	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
+	// Do not write into this vault unless it is absolutely safe to do so!
+	if ( !loaddata[ index ] )
+		return;
 	
-	if ( loaddata[ index ] )
+	// Vaults must be initialized!
+	if ( !bVaultsReady )
+		return;
+	
+	// Don't care unless the player actually put a bit of effort here
+	if ( playerlevel[ index ] == 0 && medals[ index ] == 0 )
+		return;
+	
+	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
+	string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+	
+	// The fewer the I/O file operations it has to do the better, right?
+	
+	// Main data for this player does not exist, add it
+	if ( !bMainDataExists[ index ] )
 	{
-		string fullpath = PATH_MAIN_DATA + "SCXPM_" + g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() ) + ".dat";
-		fullpath.Replace( ':', '_' );
-		File@ thefile = g_FileSystem.OpenFile( fullpath, OpenFile::WRITE );
+		string stuff;
+		stuff = szSteamID + "\t";
 		
-		if ( thefile !is null && thefile.IsOpen() )
+		stuff += string( xp[ index ] ) + "#" + playerlevel[ index ];
+		stuff += "#" + skillpoints[ index ] + "#" + medals[ index ];
+		stuff += "#" + health[ index ] + "#" + armor[ index ] + "#" + rhealth[ index ] + "#" + rarmor[ index ] + "#" + rammo[ index ] + "#" + gravity[ index ] + "#" + speed[ index ] + "#" + dist[ index ] + "#" + dodge[ index ];
+		stuff += "#" + spawndmg[ index ] + "#" + ubercharge[ index ] + "#" + fastheal[ index ] + "#" + demoman[ index ] + "#" + practiceshot[ index ] + "#" + bioelectric[ index ] + "#" + redcross[ index ];
+		stuff += "#" + bData[ index ];
+		stuff += "#" + hud_red1[ index ] + "#" + hud_green1[ index ] + "#" + hud_blue1[ index ] + "#" + hud_red2[ index ] + "#" + hud_green2[ index ] + "#" + hud_blue2[ index ] + "#" + hud_alpha[ index ];
+		stuff += "#" + hud_pos_x[ index ] + "#" + hud_pos_y[ index ] + "#" + hud_effect[ index ] + "#" + hud_ef_fadein[ index ] + "#" + hud_ef_scantime[ index ];
+		stuff += "#" + expamp[ index ] + "#" + expamptime[ index ].ToUnixTimestamp();
+		stuff += "#" + firstplay[ index ].ToUnixTimestamp() + "#" + nextdaily[ index ].ToUnixTimestamp() + "#" + dailyget[ index ];
+		stuff += "#" + bHandicaps[ index ];
+		
+		g_MainVaultData.insertLast( stuff );
+		bMainDataExists[ index ] = true;
+	}
+	else
+	{
+		// Go through the vault
+		for ( uint uiVaultIndex = 0; uiVaultIndex < g_MainVaultData.length(); uiVaultIndex++ )
+		{
+			// Update our data?
+			if ( g_MainVaultData[ uiVaultIndex ].StartsWith( szSteamID ) )
+			{
+				string stuff;
+				stuff = szSteamID + "\t";
+				
+				stuff += string( xp[ index ] ) + "#" + playerlevel[ index ];
+				stuff += "#" + skillpoints[ index ] + "#" + medals[ index ];
+				stuff += "#" + health[ index ] + "#" + armor[ index ] + "#" + rhealth[ index ] + "#" + rarmor[ index ] + "#" + rammo[ index ] + "#" + gravity[ index ] + "#" + speed[ index ] + "#" + dist[ index ] + "#" + dodge[ index ];
+				stuff += "#" + spawndmg[ index ] + "#" + ubercharge[ index ] + "#" + fastheal[ index ] + "#" + demoman[ index ] + "#" + practiceshot[ index ] + "#" + bioelectric[ index ] + "#" + redcross[ index ];
+				stuff += "#" + bData[ index ];
+				stuff += "#" + hud_red1[ index ] + "#" + hud_green1[ index ] + "#" + hud_blue1[ index ] + "#" + hud_red2[ index ] + "#" + hud_green2[ index ] + "#" + hud_blue2[ index ] + "#" + hud_alpha[ index ];
+				stuff += "#" + hud_pos_x[ index ] + "#" + hud_pos_y[ index ] + "#" + hud_effect[ index ] + "#" + hud_ef_fadein[ index ] + "#" + hud_ef_scantime[ index ];
+				stuff += "#" + expamp[ index ] + "#" + expamptime[ index ].ToUnixTimestamp();
+				stuff += "#" + firstplay[ index ].ToUnixTimestamp() + "#" + nextdaily[ index ].ToUnixTimestamp() + "#" + dailyget[ index ];
+				stuff += "#" + bHandicaps[ index ];
+				
+				g_MainVaultData[ uiVaultIndex ] = stuff;
+				break;
+			}
+		}
+		
+		// Main data must have priority, so achievement data check goes here
+		if ( !bAchievementDataExists[ index ] )
 		{
 			string stuff;
+			stuff = szSteamID + "\t";
 			
-			stuff += string( xp[ index ] ) + "#" + playerlevel[ index ];
-			stuff += "#" + skillpoints[ index ] + "#" + medals[ index ];
-			stuff += "#" + health[ index ] + "#" + armor[ index ] + "#" + rhealth[ index ] + "#" + rarmor[ index ] + "#" + rammo[ index ] + "#" + gravity[ index ] + "#" + speed[ index ] + "#" + dist[ index ] + "#" + dodge[ index ];
-			stuff += "#" + spawndmg[ index ] + "#" + ubercharge[ index ] + "#" + fastheal[ index ] + "#" + demoman[ index ] + "#" + practiceshot[ index ] + "#" + bioelectric[ index ] + "#" + redcross[ index ];
-			stuff += "#" + bData[ index ];
-			stuff += "#" + hud_red1[ index ] + "#" + hud_green1[ index ] + "#" + hud_blue1[ index ] + "#" + hud_red2[ index ] + "#" + hud_green2[ index ] + "#" + hud_blue2[ index ] + "#" + hud_alpha[ index ];
-			stuff += "#" + hud_pos_x[ index ] + "#" + hud_pos_y[ index ] + "#" + hud_effect[ index ] + "#" + hud_ef_fadein[ index ] + "#" + hud_ef_scantime[ index ];
-			stuff += "#" + expamp[ index ] + "#" + expamptime[ index ].ToUnixTimestamp();
-			stuff += "#" + firstplay[ index ].ToUnixTimestamp() + "#" + nextdaily[ index ].ToUnixTimestamp() + "#" + dailyget[ index ];
-			stuff += "#" + bHandicaps[ index ] + "\n";
+			CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
 			
-			thefile.Write( stuff );
-			thefile.Close();
+			for ( uint i = 0; i < szAchievementNames.length(); i++ )
+			{
+				if ( aData[ index ][ i ] )
+					stuff += "1_" + ( aClaim[ index ][ i ] ? "1" : "0" ) + "#";
+				else
+				{
+					if ( pCustom.HasKeyvalue( "$i_sys_a_" + string( i ) ) )
+					{
+						CustomKeyvalue iProgress_pre( pCustom.GetKeyvalue( "$i_sys_a_" + string( i ) ) );
+						int iProgress = iProgress_pre.GetInteger();
+						stuff += "0_" + string( iProgress ) + "#";
+					}
+					else
+						stuff += "0_0#";
+				}
+			}
+			
+			g_AchievementVaultData.insertLast( stuff );
+			bAchievementDataExists[ index ] = true;
 		}
 		else
 		{
-			// Shutdown server!
-			g_Game.AlertMessage( at_logged, "FATAL ERROR (shutting down): PATH_MAIN_DATA is NULL!\n" );
-			g_EngineFuncs.ServerCommand( "quit\n" );
+			// Go through the vault
+			for ( uint uiVaultIndex = 0; uiVaultIndex < g_AchievementVaultData.length(); uiVaultIndex++ )
+			{
+				// Update our data?
+				if ( g_AchievementVaultData[ uiVaultIndex ].StartsWith( szSteamID ) )
+				{
+					string stuff;
+					stuff = szSteamID + "\t";
+					
+					CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
+					
+					for ( uint i = 0; i < szAchievementNames.length(); i++ )
+					{
+						if ( aData[ index ][ i ] )
+							stuff += "1_" + ( aClaim[ index ][ i ] ? "1" : "0" ) + "#";
+						else
+						{
+							if ( pCustom.HasKeyvalue( "$i_sys_a_" + string( i ) ) )
+							{
+								CustomKeyvalue iProgress_pre( pCustom.GetKeyvalue( "$i_sys_a_" + string( i ) ) );
+								int iProgress = iProgress_pre.GetInteger();
+								stuff += "0_" + string( iProgress ) + "#";
+							}
+							else
+								stuff += "0_0#";
+						}
+					}
+					
+					g_AchievementVaultData[ uiVaultIndex ] = stuff;
+					break;
+				}
+			}
 		}
 	}
 }
 
 void scxpm_loaddata( const int& in index )
 {
+	// Vaults must be initialized!
+	if ( !bVaultsReady )
+		return;
+	
+	// Prepare to go through the vaults
 	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
+	string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
 	
-	string fullpath = PATH_MAIN_DATA + "SCXPM_" + g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() ) + ".dat";
-	fullpath.Replace( ':', '_' );
-	File@ thefile = g_FileSystem.OpenFile( fullpath, OpenFile::READ );
-	
-	if ( thefile !is null && thefile.IsOpen() )
+	// Main data
+	for ( uint uiVaultIndex = 0; uiVaultIndex < g_MainVaultData.length(); uiVaultIndex++ )
 	{
-		string line;
+		array< string >@ key = g_MainVaultData[ uiVaultIndex ].Split( '\t' );
 		
-		thefile.ReadLine( line );
-		line.Replace( '#', ' ' );
-		array< string >@ pre_data = line.Split( ' ' );
-		
-		pre_data[ 0 ].Trim();
-		pre_data[ 1 ].Trim();
-		pre_data[ 2 ].Trim();
-		pre_data[ 3 ].Trim();
-		pre_data[ 4 ].Trim();
-		pre_data[ 5 ].Trim();
-		pre_data[ 6 ].Trim();
-		pre_data[ 7 ].Trim();
-		pre_data[ 8 ].Trim();
-		pre_data[ 9 ].Trim();
-		pre_data[ 10 ].Trim();
-		pre_data[ 11 ].Trim();
-		pre_data[ 12 ].Trim();
-		pre_data[ 13 ].Trim();
-		pre_data[ 14 ].Trim();
-		pre_data[ 15 ].Trim();
-		pre_data[ 16 ].Trim();
-		pre_data[ 17 ].Trim();
-		pre_data[ 18 ].Trim();
-		pre_data[ 19 ].Trim();
-		pre_data[ 20 ].Trim();
-		pre_data[ 21 ].Trim();
-		pre_data[ 22 ].Trim();
-		pre_data[ 23 ].Trim();
-		pre_data[ 24 ].Trim();
-		pre_data[ 25 ].Trim();
-		pre_data[ 26 ].Trim();
-		pre_data[ 27 ].Trim();
-		pre_data[ 28 ].Trim();
-		pre_data[ 29 ].Trim();
-		pre_data[ 30 ].Trim();
-		pre_data[ 31 ].Trim();
-		pre_data[ 32 ].Trim();
-		pre_data[ 33 ].Trim();
-		pre_data[ 34 ].Trim();
-		pre_data[ 35 ].Trim();
-		pre_data[ 36 ].Trim();
-		pre_data[ 37 ].Trim();
-		pre_data[ 38 ].Trim();
-		
-		xp[ index ] = atoi( pre_data[ 0 ] );
-		playerlevel[ index ] = atoi( pre_data[ 1 ] );
-		scxpm_calcneedxp( index );
-		skillpoints[ index ] = atoi( pre_data[ 2 ] );
-		medals[ index ] = atoi( pre_data[ 3 ] );
-		health[ index ] = atoi( pre_data[ 4 ] );
-		armor[ index ] = atoi( pre_data[ 5 ] );
-		rhealth[ index ] = atoi( pre_data[ 6 ] );
-		rarmor[ index ] = atoi( pre_data[ 7 ] );
-		rammo[ index ] = atoi( pre_data[ 8 ] );
-		gravity[ index ] = atoi( pre_data[ 9 ] );
-		speed[ index ] = atoi( pre_data[ 10 ] );
-		dist[ index ] = atoi( pre_data[ 11 ] );
-		dodge[ index ] = atoi( pre_data[ 12 ] );
-		spawndmg[ index ] = atoi( pre_data[ 13 ] );
-		ubercharge[ index ] = atoi( pre_data[ 14 ] );
-		fastheal[ index ] = atoi( pre_data[ 15 ] );
-		demoman[ index ] = atoi( pre_data[ 16 ] );
-		practiceshot[ index ] = atoi( pre_data[ 17 ] );
-		bioelectric[ index ] = atoi( pre_data[ 18 ] );
-		redcross[ index ] = atoi( pre_data[ 19 ] );
-		bData[ index ] = atoi( pre_data[ 20 ] );
-		hud_red1[ index ] = atoi( pre_data[ 21 ] );
-		hud_green1[ index ] = atoi( pre_data[ 22 ] );
-		hud_blue1[ index ] = atoi( pre_data[ 23 ] );
-		hud_red2[ index ] = atoi( pre_data[ 24 ] );
-		hud_green2[ index ] = atoi( pre_data[ 25 ] );
-		hud_blue2[ index ] = atoi( pre_data[ 26 ] );
-		hud_alpha[ index ] = atoi( pre_data[ 27 ] );
-		hud_pos_x[ index ] = atof( pre_data[ 28 ] );
-		hud_pos_y[ index ] = atof( pre_data[ 29 ] );
-		hud_effect[ index ] = atoi( pre_data[ 30 ] );
-		hud_ef_fadein[ index ] = atof( pre_data[ 31 ] );
-		hud_ef_scantime[ index ] = atof( pre_data[ 32 ] );
-		expamp[ index ] = atoi( pre_data[ 33 ] );
-		expamptime[ index ].SetUnixTimestamp( atoi( pre_data[ 34 ] ) );
-		firstplay[ index ].SetUnixTimestamp( atoi( pre_data[ 35 ] ) );
-		nextdaily[ index ].SetUnixTimestamp( atoi( pre_data[ 36 ] ) );
-		dailyget[ index ] = atoi( pre_data[ 37 ] );
-		bHandicaps[ index ] = atoi( pre_data[ 38 ] );
-		
-		scxpm_amptask(); // Force check
-		GetAchievementData( index );
-		
-		int iCheck = CheckDaily( index, DateTime( UnixTimestamp() ), nextdaily[ index ] );
-		if ( iCheck == 1 )
-			g_Scheduler.SetTimeout( "scxpm_dailyrewards", 30.0, index, ( dailyget[ index ] + 1 ) );
-		else if ( iCheck == -1 )
+		// This is our SteamID?
+		string szCheck = key[ 0 ];
+		szCheck.Trim();
+		if ( szSteamID == szCheck )
 		{
-			string dummy;
-			DailyReward( index, 0, false, dummy, dummy );
-		}
-		
-		scxpm_getrank( index );
-		
-		// Check if handicaps are allowed on this map
-		if ( !gNoSkills || gAllowHandicaps )
-		{
-			// Enabled. Autoselection turned on?
-			if ( ( bData[ index ] & HC_AUTOSELECT ) != 0 )
+			// It is, retrieve data
+			string data = key[ 1 ];
+			data.Trim();
+			array< string >@ config = data.Split( '#' );
+			
+			for ( uint uiDataLength = 0; uiDataLength < config.length(); uiDataLength++ )
 			{
-				// On, reactivate the handicaps
-				CustomKeyvalues@ pHandicaps = pPlayer.GetCustomKeyvalues();
-				
-				if ( ( bHandicaps[ index ] & 1 ) != 0 ) 
+				config[ uiDataLength ].Trim();
+			}
+			
+			xp[ index ] = atoi( config[ 0 ] );
+			playerlevel[ index ] = atoi( config[ 1 ] );
+			scxpm_calcneedxp( index );
+			skillpoints[ index ] = atoi( config[ 2 ] );
+			medals[ index ] = atoi( config[ 3 ] );
+			health[ index ] = atoi( config[ 4 ] );
+			armor[ index ] = atoi( config[ 5 ] );
+			rhealth[ index ] = atoi( config[ 6 ] );
+			rarmor[ index ] = atoi( config[ 7 ] );
+			rammo[ index ] = atoi( config[ 8 ] );
+			gravity[ index ] = atoi( config[ 9 ] );
+			speed[ index ] = atoi( config[ 10 ] );
+			dist[ index ] = atoi( config[ 11 ] );
+			dodge[ index ] = atoi( config[ 12 ] );
+			spawndmg[ index ] = atoi( config[ 13 ] );
+			ubercharge[ index ] = atoi( config[ 14 ] );
+			fastheal[ index ] = atoi( config[ 15 ] );
+			demoman[ index ] = atoi( config[ 16 ] );
+			practiceshot[ index ] = atoi( config[ 17 ] );
+			bioelectric[ index ] = atoi( config[ 18 ] );
+			redcross[ index ] = atoi( config[ 19 ] );
+			bData[ index ] = atoi( config[ 20 ] );
+			hud_red1[ index ] = atoi( config[ 21 ] );
+			hud_green1[ index ] = atoi( config[ 22 ] );
+			hud_blue1[ index ] = atoi( config[ 23 ] );
+			hud_red2[ index ] = atoi( config[ 24 ] );
+			hud_green2[ index ] = atoi( config[ 25 ] );
+			hud_blue2[ index ] = atoi( config[ 26 ] );
+			hud_alpha[ index ] = atoi( config[ 27 ] );
+			hud_pos_x[ index ] = atof( config[ 28 ] );
+			hud_pos_y[ index ] = atof( config[ 29 ] );
+			hud_effect[ index ] = atoi( config[ 30 ] );
+			hud_ef_fadein[ index ] = atof( config[ 31 ] );
+			hud_ef_scantime[ index ] = atof( config[ 32 ] );
+			expamp[ index ] = atoi( config[ 33 ] );
+			expamptime[ index ].SetUnixTimestamp( atoi( config[ 34 ] ) );
+			firstplay[ index ].SetUnixTimestamp( atoi( config[ 35 ] ) );
+			nextdaily[ index ].SetUnixTimestamp( atoi( config[ 36 ] ) );
+			dailyget[ index ] = atoi( config[ 37 ] );
+			bHandicaps[ index ] = atoi( config[ 38 ] );
+			
+			scxpm_amptask(); // Force check
+			GetAchievementData( index );
+			
+			int iCheck = CheckDaily( index, DateTime( UnixTimestamp() ), nextdaily[ index ] );
+			if ( iCheck == 1 )
+				g_Scheduler.SetTimeout( "scxpm_dailyrewards", 30.0, index, ( dailyget[ index ] + 1 ) );
+			else if ( iCheck == -1 )
+			{
+				string dummy;
+				DailyReward( index, 0, false, dummy, dummy );
+			}
+			
+			scxpm_getrank( index );
+			
+			// Check if handicaps are allowed on this map
+			if ( !gNoSkills || gAllowHandicaps )
+			{
+				// Enabled. Autoselection turned on?
+				if ( ( bData[ index ] & HC_AUTOSELECT ) != 0 )
 				{
-					handicap1[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap01", 1 );
+					// On, reactivate the handicaps
+					CustomKeyvalues@ pHandicaps = pPlayer.GetCustomKeyvalues();
+					
+					if ( ( bHandicaps[ index ] & 1 ) != 0 ) 
+					{
+						handicap1[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap01", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 2 ) != 0 ) 
+					{
+						handicap2[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap02", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 4 ) != 0 ) 
+					{
+						handicap3[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap03", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 8 ) != 0 ) 
+					{
+						handicap4[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap04", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 16 ) != 0 ) 
+					{
+						handicap5[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap05", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 32 ) != 0 ) 
+					{
+						handicap6[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap06", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 64 ) != 0 ) 
+					{
+						handicap7[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap07", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 128 ) != 0 ) 
+					{
+						handicap8[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap08", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 256 ) != 0 ) 
+					{
+						handicap9[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap09", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 512 ) != 0 ) 
+					{
+						handicap10[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap10", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 1024 ) != 0 ) 
+					{
+						handicap11[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap11", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 2048 ) != 0 ) 
+					{
+						handicap12[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap12", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 4096 ) != 0 ) 
+					{
+						handicap13[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap13", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 8192 ) != 0 ) 
+					{
+						handicap14[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap14", 1 );
+					}
 				}
-				if ( ( bHandicaps[ index ] & 2 ) != 0 ) 
+				else
 				{
-					handicap2[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap02", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 4 ) != 0 ) 
-				{
-					handicap3[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap03", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 8 ) != 0 ) 
-				{
-					handicap4[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap04", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 16 ) != 0 ) 
-				{
-					handicap5[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap05", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 32 ) != 0 ) 
-				{
-					handicap6[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap06", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 64 ) != 0 ) 
-				{
-					handicap7[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap07", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 128 ) != 0 ) 
-				{
-					handicap8[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap08", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 256 ) != 0 ) 
-				{
-					handicap9[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap09", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 512 ) != 0 ) 
-				{
-					handicap10[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap10", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 1024 ) != 0 ) 
-				{
-					handicap11[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap11", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 2048 ) != 0 ) 
-				{
-					handicap12[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap12", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 4096 ) != 0 ) 
-				{
-					handicap13[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap13", 1 );
-				}
-				if ( ( bHandicaps[ index ] & 8192 ) != 0 ) 
-				{
-					handicap14[ index ] = true;
-					pHandicaps.SetKeyvalue( "$i_handicap14", 1 );
+					// Disabled, reset the handicap data
+					bHandicaps[ index ] = 0;
 				}
 			}
-			else
-			{
-				// Disabled, reset the handicap data
-				bHandicaps[ index ] = 0;
-			}
+			
+			bMainDataExists[ index ] = true;
+			loaddata[ index ] = true;
+			break;
 		}
-		
-		thefile.Close();
 	}
 	
+	// Load permanent increases last
 	GetPermaIncrease( index );
-	loaddata[ index ] = true;
+	
+	if ( !bMainDataExists[ index ] )
+	{
+		// No data found, assume new player
+		LoadEmptySkills( index );
+		loaddata[ index ] = true;
+	}
 }
 
 void AddEventEXP( const int& in index )
@@ -6358,101 +6454,68 @@ void GetPermaIncrease( const int& in index, MenuHandler@ state = null, bool bSho
 // Get achievement data
 void GetAchievementData( const int& in index, MenuHandler@ state = null )
 {
+	// Prepare to go through the second vault
 	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
+	string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
 	
-	string szPath = PATH_ACHIEVEMENT_DATA + "A_" + g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() ) + ".ini";
-	szPath.Replace( ':', '_' );
-	File@ thefile = g_FileSystem.OpenFile( szPath, OpenFile::READ );
-	
-	if ( thefile !is null && thefile.IsOpen() )
+	// Load achievement data
+	for ( uint uiVaultIndex = 0; uiVaultIndex < g_AchievementVaultData.length(); uiVaultIndex++ )
 	{
-		string szLine;
-		while( !thefile.EOFReached() )
-		{
-			// Get all configs
-			thefile.ReadLine( szLine );
-			if ( szLine.Length() > 0 )
-			{
-				array< string >@ pre_data = szLine.Split( '#' );
-				pre_data[ 0 ].Trim(); // Achievement ID
-				pre_data[ 1 ].Trim(); // Unlock status
-				pre_data[ 2 ].Trim(); // Progress / Claim status
-				
-				// Get data
-				// If achievement is unlocked, just hold said data and check claim status
-				if ( pre_data[ 1 ] == 'TRUE' )
-				{
-					aData[ index ][ atoi( pre_data[ 0 ] ) ] = true;
-					aClaim[ index ][ atoi( pre_data[ 0 ] ) ] = ( pre_data[ 2 ] == '1' ? true : false );
-				}
-				else
-				{
-					// Not unlocked, retrieve progress data and let handler take care of rest
-					CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
-					pCustom.SetKeyvalue( "$i_sys_a_" + pre_data[ 0 ], atoi( pre_data[ 2 ] ) );
-				}
-				
-				// If menu is opened, add item
-				if ( state !is null )
-				{
-					if ( pre_data[ 1 ] == 'TRUE' )
-						state.menu.AddItem( "[U] " + szAchievementNames[ atoi( pre_data[ 0 ] ) ] + "\n", any( pre_data[ 0 ] ) );
-					else
-						state.menu.AddItem( "[-] " + szAchievementNames[ atoi( pre_data[ 0 ] ) ] + "\n", any( pre_data[ 0 ] ) );
-				}
-			}
-		}
+		array< string >@ key = g_AchievementVaultData[ uiVaultIndex ].Split( '\t' );
 		
-		thefile.Close();
-	}
-	else
-	{
-		// No achievement data
-		for ( uint i = 0; i < szAchievementNames.length(); i++ )
+		// This is our SteamID?
+		string szCheck = key[ 0 ];
+		szCheck.Trim();
+		if ( szSteamID == szCheck )
 		{
-			// Force-reset all data to zero
-			aData[ index ][ i ] = false;
-			aClaim[ index ][ i ] = false;
-		}
-	}
-}
-
-// Save achievement data
-void scxpm_saveachievement( const int& in index )
-{
-	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
-	
-	if ( loaddata[ index ] )
-	{
-		string szPath = PATH_ACHIEVEMENT_DATA + "A_" + g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() ) + ".ini";
-		szPath.Replace( ':', '_' );
-		File@ thefile = g_FileSystem.OpenFile( szPath, OpenFile::WRITE );
-		
-		if ( thefile !is null && thefile.IsOpen() )
-		{
-			string stuff;
+			// It is, retrieve data
+			string data = key[ 1 ];
+			data.Trim();
+			array< string >@ config = data.Split( '#' );
 			
-			CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
-			
-			for ( uint i = 0; i < szAchievementNames.length(); i++ )
+			// Every "#" is an achievement, uiDataLength = Achievement ID
+			for ( uint uiDataLength = 0; uiDataLength < ( config.length() - 1 ); uiDataLength++ )
 			{
-				if ( aData[ index ][ i ] )
-					stuff += string( i ) + "#TRUE#" + ( aClaim[ index ][ i ] ? "1" : "0" ) + "\n";
-				else
+				config[ uiDataLength ].Trim();
+				if ( config[ uiDataLength ].Length() > 2 )
 				{
-					if ( pCustom.HasKeyvalue( "$i_sys_a_" + string( i ) ) )
+					// Another separator, done by "-" character
+					array< string >@ unlock = config[ uiDataLength ].Split( '_' );
+					
+					unlock[ 0 ].Trim(); // Locked/Unlocked achievement
+					unlock[ 1 ].Trim(); // Locked: Progress variable | Unlocked: Reward claimed
+					
+					aData[ index ][ uiDataLength ] = IntStringToBool( unlock[ 0 ] );
+					if ( !aData[ index ][ uiDataLength ] )
 					{
-						CustomKeyvalue iProgress_pre( pCustom.GetKeyvalue( "$i_sys_a_" + string( i ) ) );
-						int iProgress = iProgress_pre.GetInteger();
-						stuff += string( i ) + "#FALSE#" + string( iProgress ) + "\n";
+						CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
+						pCustom.SetKeyvalue( "$i_sys_a_" + uiDataLength, atoi( unlock[ 1 ] ) );
 					}
 					else
-						stuff += string( i ) + "#FALSE#0\n";
+						aClaim[ index ][ uiDataLength ] = IntStringToBool( unlock[ 1 ] );
+					
+					// If menu is opened, add item
+					if ( state !is null )
+					{
+						if ( aData[ index ][ uiDataLength ] )
+							state.menu.AddItem( "\\y[U]\\w " + szAchievementNames[ uiDataLength ] + "\n", any( string( uiDataLength ) ) );
+						else
+							state.menu.AddItem( "\\d[-]\\w " + szAchievementNames[ uiDataLength ] + "\n", any( string( uiDataLength ) ) );
+					}
 				}
 			}
 			
-			thefile.Write( stuff );
-			thefile.Close();
+			bAchievementDataExists[ index ] = true;
+			break;
+		}
+	}
+	
+	// No data exists, initialize menu
+	if ( !bAchievementDataExists[ index ] && state !is null )
+	{
+		for ( uint uiIndex = 0; uiIndex < szAchievementNames.length(); uiIndex++ )
+		{
+			state.menu.AddItem( "\\d[-]\\w " + szAchievementNames[ uiIndex ] + "\n", any( string( uiIndex ) ) );
 		}
 	}
 }
@@ -6861,6 +6924,24 @@ string GetFormatDate( DateTime& in dtTime )
 	}
 	
 	return szMonth + " " + day + szAppend + ", " + year;
+}
+
+// Converts a boolean to an integer, returned as a string
+string BoolToIntString( bool& in bConvert )
+{
+	if ( bConvert )
+		return "1";
+	else
+		return "0";
+}
+
+// Converts a string to a boolean, using integers
+bool IntStringToBool( string& in szConvert )
+{
+	if ( szConvert == "1" )
+		return true;
+	else
+		return false;
 }
 
 /* Check whenever time is in daily range */
@@ -7423,4 +7504,98 @@ void GiveDelayedXP( const int& in index )
 			lastfrags[ index ] = 0;
 		}
 	}
+}
+
+/* Vault handlers */
+
+// Initialize the vaults
+void InitVaults()
+{
+	// Main data
+	string szDataPath = PATH_MAIN_DATA + "main-vault.ini";
+	File@ fData = g_FileSystem.OpenFile( szDataPath, OpenFile::READ );
+	
+	if ( fData !is null && fData.IsOpen() )
+	{
+		int iArraySize = 0;
+		string szLine;
+		
+		while ( !fData.EOFReached() )
+		{
+			fData.ReadLine( szLine );
+			if ( szLine.Length() > 0 )
+			{
+				iArraySize++;
+				g_MainVaultData.resize( iArraySize );
+				g_MainVaultData[ iArraySize - 1 ] = szLine;
+			}
+		}
+		
+		fData.Close();
+	}
+	
+	// Achievement data
+	szDataPath = PATH_ACHIEVEMENT_DATA + "achievement-vault.ini";
+	@fData = g_FileSystem.OpenFile( szDataPath, OpenFile::READ );
+	
+	if ( fData !is null && fData.IsOpen() )
+	{
+		int iArraySize = 0;
+		string szLine;
+		
+		while ( !fData.EOFReached() )
+		{
+			fData.ReadLine( szLine );
+			if ( szLine.Length() > 0 )
+			{
+				iArraySize++;
+				g_AchievementVaultData.resize( iArraySize );
+				g_AchievementVaultData[ iArraySize - 1 ] = szLine;
+			}
+		}
+		
+		fData.Close();
+	}
+	
+	bVaultsReady = true;
+}
+
+// Update all vaults contents
+void DumpVaults()
+{
+	// Vaults must be initialized!
+	if ( !bVaultsReady )
+		return;
+	
+	// Main data
+	string szDataPath = PATH_MAIN_DATA + "main-vault.ini";
+	
+	File@ fData = g_FileSystem.OpenFile( szDataPath, OpenFile::WRITE );
+	if ( fData !is null && fData.IsOpen() )
+	{
+		for ( uint uiVaultIndex = 0; uiVaultIndex < g_MainVaultData.length(); uiVaultIndex++ )
+		{
+			fData.Write( "\n" + g_MainVaultData[ uiVaultIndex ] );
+		}
+		
+		fData.Close();
+	}
+	else
+		g_Game.AlertMessage( at_logged, "[SCXPM] WARNING: Couldn't open file \"" + szDataPath + "\" for writing!\n" );
+	
+	// Achievement data
+	szDataPath = PATH_ACHIEVEMENT_DATA + "achievement-vault.ini";
+	
+	@fData = g_FileSystem.OpenFile( szDataPath, OpenFile::WRITE );
+	if ( fData !is null && fData.IsOpen() )
+	{
+		for ( uint uiVaultIndex = 0; uiVaultIndex < g_AchievementVaultData.length(); uiVaultIndex++ )
+		{
+			fData.Write( "\n" + g_AchievementVaultData[ uiVaultIndex ] );
+		}
+		
+		fData.Close();
+	}
+	else
+		g_Game.AlertMessage( at_logged, "[SCXPM] WARNING: Couldn't open file \"" + szDataPath + "\" for writing!\n" );
 }
