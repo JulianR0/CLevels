@@ -1767,6 +1767,7 @@ void scxpm_sdac()
 		onecount = false;
 	}
 	scxpm_regen();
+	DumpVaults();
 	scxpm_updatehc();
 	
 	// Scan dropped weapons and check if it's clips are empty
