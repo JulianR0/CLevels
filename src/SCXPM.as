@@ -16,8 +16,8 @@
 	along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const string version = "v3.20";
-const string lastupdate = "August 28th, 2021";
+const string version = "v3.21";
+const string lastupdate = "September 19th, 2021";
 
 const string PATH_MAIN_DATA = "scripts/plugins/store/scxpm/data/";
 const string PATH_PERMAINCREASE_DATA = "scripts/plugins/store/scxpm/permaincrease/";
@@ -592,96 +592,113 @@ HookReturnCode ClientSay( SayParameters@ pParams )
 	{
 		CBasePlayer@ pPlayer = pParams.GetPlayer();
 		string text = pParams.GetCommand();
-		pParams.ShouldHide = true;
 		text.ToLowercase();
 		
 		if ( text == '/selectskills' )
 		{
+			pParams.ShouldHide = true; // Only hide on command execution
 			SCXPMSkill( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/resetskills' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_breset( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/selectspecials' )
 		{
+			pParams.ShouldHide = true;
 			SCXPMSpecials( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/resetspecials' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_sreset( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/resetlevels' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_lvltomedal( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/handicaps' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_handicaps( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/hudsettings' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_hudmain( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/playerskills' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_others( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/skillsinfo' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_info( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/scxpminfo' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_version( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/xpgain' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_xpgain( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/specialsinfo' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_sinfo( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/handicapsinfo' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_hcinfo( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/character' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_mydata( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/achievements' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_achievements( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/menu' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_menu( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/help' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_helpme( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
 		else if ( text == '/spectate' )
 		{
+			pParams.ShouldHide = true;
 			scxpm_spectate( pPlayer.entindex() );
 			return HOOK_HANDLED;
 		}
@@ -691,16 +708,16 @@ HookReturnCode ClientSay( SayParameters@ pParams )
 			const CCommand@ args = pParams.GetArguments();
 			if ( args[ 0 ] == '/hudcolor' )
 			{
+				pParams.ShouldHide = true;
 				scxpm_set_hudcustom( pParams );
 				return HOOK_HANDLED;
 			}
 			else if ( args[ 0 ] == '/inspect' )
 			{
+				pParams.ShouldHide = true;
 				scxpm_inspect_main( pParams );
 				return HOOK_HANDLED;
 			}
-			else
-				pParams.ShouldHide = false;
 		}
 	}
 	
