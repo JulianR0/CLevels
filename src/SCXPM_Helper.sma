@@ -1,6 +1,6 @@
 /*
 	Imperium Sven Co-op's SCXPM: Auxiliary Scripts
-	Copyright (C) 2019-2021  Julian Rodriguez
+	Copyright (C) 2019-2022  Julian Rodriguez
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -25,6 +25,9 @@
 
 new g_MaxPlayers;
 
+new medkitpoints_cvar;
+new medkitpoints;
+
 public plugin_precache()
 {
 	register_forward( FM_KeyValue, "check_entities" );
@@ -32,9 +35,13 @@ public plugin_precache()
 
 public plugin_init()
 {
-	register_plugin( "SCXPM Helper", "1.2", "Giegue" );
+	register_plugin( "SCXPM Helper", "1.3", "Giegue" );
 	
 	g_MaxPlayers = get_maxplayers();
+	
+	// Wait for the map to finish loading before getting the value of this CVar
+	medkitpoints_cvar = get_cvar_pointer( "mp_disable_medkit_points" );
+	set_task( 1.0, "GetPoints" );
 	
 	// SCXPM HELPER
 	RegisterHam( Ham_TakeDamage, "monster_sentry", "rexp_disable" );
@@ -43,9 +50,10 @@ public plugin_init()
 	RegisterHam( Ham_TakeDamage, "monster_robogrunt", "rexp_disable" );
 }
 
-// To reduce dependency on AMXX, all AMXX-only achievements has been removed.
-// This auxiliary script is now optional.
-// SCXPM behaviour will not be altered if you choose to not compile/use this plugin
+public GetPoints()
+{
+	medkitpoints = get_pcvar_num( medkitpoints_cvar );
+}
 
 public check_entities( entid, kvd_handle )
 {
@@ -197,26 +205,30 @@ public check_entities( entid, kvd_handle )
 
 public rexp_disable( victim, inflictor, attacker, Float:dmg, dmgbits )
 {
-	// Players only
-	if ( attacker >= 1 && attacker <= g_MaxPlayers )
+	// Medkit points are disabled. Disable for wrench repair too
+	if ( !medkitpoints )
 	{
-		// !!! Only care if player ally !!!
-		if ( entity_get_int( victim, EV_INT_iuser4 ) == 0 ) // AngelScript updates the entity's pev->iuser4 so AMXX can know about this.
-			return HAM_IGNORED;
-		
-		// Affect wrench repair only
-		if ( get_user_weapon( attacker ) == 20 )
+		// Players only
+		if ( attacker >= 1 && attacker <= g_MaxPlayers )
 		{
-			static Float:flHealth, Float:flMaxHealth;
-			flHealth = entity_get_float( victim, EV_FL_health );
-			flMaxHealth = entity_get_float( victim, EV_FL_max_health );
+			// !!! Only care if player ally !!!
+			if ( entity_get_int( victim, EV_INT_iuser4 ) == 0 ) // AngelScript updates the entity's pev->iuser4 so AMXX can know about this.
+				return HAM_IGNORED;
 			
-			if ( ( flHealth + dmg ) > flMaxHealth )
-				entity_set_float( victim, EV_FL_health, flMaxHealth );
-			else
-				entity_set_float( victim, EV_FL_health, ( flHealth + dmg ) );
-			
-			SetHamParamFloat( 4, 0.0 );
+			// Affect wrench repair only
+			if ( get_user_weapon( attacker ) == 20 ) // weapon ID will no longer match if any custom entity is registered
+			{
+				static Float:flHealth, Float:flMaxHealth;
+				flHealth = entity_get_float( victim, EV_FL_health );
+				flMaxHealth = entity_get_float( victim, EV_FL_max_health );
+				
+				if ( ( flHealth + dmg ) > flMaxHealth )
+					entity_set_float( victim, EV_FL_health, flMaxHealth );
+				else
+					entity_set_float( victim, EV_FL_health, ( flHealth + dmg ) );
+				
+				SetHamParamFloat( 4, 0.0 );
+			}
 		}
 	}
 	
