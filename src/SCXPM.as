@@ -16,13 +16,14 @@
 	along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const string version = "v3.70";
-const string lastupdate = "July 10th, 2022";
+const string version = "v3.72";
+const string lastupdate = "July 14th, 2022";
 
 const int SAVE_MIN_LEVEL = 1; // Min level required for data to be saved
 const int SAVE_MIN_ACHIEVEMENTS = 1; // Min achievements cleared for achievements to be saved
 const float SAVE_TIME = 2.0; // Save players levels/achievements every X.X time
 const bool ACHIEVEMENTS_ENABLED = true; // Enable/Disable achievements
+const bool ALWAYS_OVERPOWER = false; // Globally enable "overpower" setting
 
 const string PATH_MAIN_DATA = "scripts/plugins/store/scxpm/data/";
 const string PATH_PERMAINCREASE_DATA = "scripts/plugins/store/scxpm/permaincrease/";
@@ -179,6 +180,8 @@ array< float > rammowait( 33 );
 array< float > flNextHPRegen( 33 );
 float starthealth = 100.0;
 float startarmor = 100.0;
+float maxhealth = 100.0;
+float maxarmor = 100.0;
 array< int > skillIncrement( 33 );
 array< float > lastfrags( 33 );
 array< int > lastDeadflag( 33 );
@@ -200,6 +203,7 @@ bool gNoGravity;
 bool gNoEvent;
 bool gNoHandicaps;
 bool gHideHUD;
+bool gOverPower;
 bool onecount;
 bool event_active;
 bool engage_mode;
@@ -302,6 +306,7 @@ void MapInit()
 	gNoGravity = false;
 	gNoHandicaps = false;
 	gHideHUD = false;
+	gOverPower = false;
 	onecount = false;
 	can_edit_handicaps = true;
 	bSaveOldSkills = false;
@@ -409,6 +414,8 @@ void MapInit()
 							gNoHandicaps = true;
 						else if ( pre_mode[ i ] == 'HIDE_HUD' )
 							gHideHUD = true;
+						else if ( pre_mode[ i ] == 'OVERPOWER' )
+							gOverPower = true;
 					}
 				}
 				
@@ -427,6 +434,7 @@ void MapInit()
 		}
 	}
 	
+	if ( ALWAYS_OVERPOWER ) gOverPower = true;
 	g_Scheduler.SetTimeout( "scxpm_block_handicaps", 80.0 );
 	
 	// Initialize vaults
@@ -4687,6 +4695,10 @@ void scxpm_client_spawn( const int& in index )
 	{
 		// Just joined, tell the player about current map settings, if applicable
 		g_Scheduler.SetTimeout( "scxpm_latesettings", 10.0, index ); // can't send the message this quickly, wait
+		
+		// Get the map's default max HP/AP for this player
+		maxhealth = pPlayer.pev.max_health;
+		maxarmor = pPlayer.pev.armortype;
 	}
 	
 	if ( pPlayer !is null && pPlayer.IsConnected() )
@@ -4706,17 +4718,28 @@ void scxpm_client_spawn( const int& in index )
 		
 		// handicap9 = Lacking Help handicap
 		pPlayer.pev.health = ( float( health[ index ] ) / 2.0 ) + starthealth + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
+		if ( gOverPower ) pPlayer.pev.max_health = ( float( health[ index ] ) / 2.0 ) + maxhealth + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
 		pPlayer.pev.armorvalue = ( float( armor[ index ] ) / 2.0 ) + startarmor + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
+		if ( gOverPower ) pPlayer.pev.armortype = ( float( armor[ index ] ) / 2.0 ) + maxarmor + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
 		
-		// Don't allow health/armor to become too high
+		// Don't allow health/armor to become too high, unless OverPower mode is on
+		// A 200 HP/AP limit is still to be held for maxhealth and maxarmor
 		if ( pPlayer.pev.health > 200 )
 		{
-			pPlayer.pev.health = 200;
+			if ( gOverPower )
+				pPlayer.pev.max_health = 200;
+			else
+				pPlayer.pev.health = 200;
+			
 			starthealth = 100;
 		}
 		if ( pPlayer.pev.armorvalue > 200 )
 		{
-			pPlayer.pev.armorvalue = 200;
+			if ( gOverPower )
+				pPlayer.pev.armortype = 200;
+			else
+				pPlayer.pev.armorvalue = 200;
+			
 			startarmor = 100;
 		}
 		
@@ -5059,9 +5082,19 @@ void scxpm_breset( const int& in index, bool silent = false )
 	
 	if ( pPlayer.pev.health > starthealth + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) ) )
 		pPlayer.pev.health = starthealth + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
+	if ( gOverPower )
+	{
+		if ( pPlayer.pev.max_health > maxhealth + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) ) )
+			pPlayer.pev.max_health = maxhealth + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
+	}
 	
 	if ( pPlayer.pev.armorvalue > startarmor + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) ) )
 		pPlayer.pev.armorvalue = startarmor + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
+	if ( gOverPower )
+	{
+		if ( pPlayer.pev.armortype > maxarmor + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) ) )
+			pPlayer.pev.armortype = maxarmor + ( handicap9[ index ] ? 0.0 : Math.clamp( 0.0, 30.0, float( medals[ index ] ) ) );
+	}
 	
 	pPlayer.pev.gravity = 1.0;
 	
@@ -5239,6 +5272,9 @@ void SCXPMSkillChoice( CTextMenu@ menu, CBasePlayer@ pPlayer, int page, const CT
 				health[ index ] += skillIncrement[ index ];
 				
 				pSkills.SetKeyvalue( "$i_health", health[ index ] );
+				
+				if ( gOverPower )
+					pPlayer.pev.max_health = maxhealth + ( health[ index ] / 2 );
 			}
 			else
 				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] This skill is maxed out!\n" );
@@ -5261,6 +5297,9 @@ void SCXPMSkillChoice( CTextMenu@ menu, CBasePlayer@ pPlayer, int page, const CT
 				armor[ index ] += skillIncrement[ index ];
 				
 				pSkills.SetKeyvalue( "$i_armor", armor[ index ] );
+				
+				if ( gOverPower )
+					pPlayer.pev.armortype = maxarmor + ( armor[ index ] / 2 );
 			}
 			else
 				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] This skill is maxed out!\n" );
@@ -5718,14 +5757,14 @@ void scxpm_info( const int& in index )
 {
 	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
 	
-	string szInfo = "1. Strength:\n   Starthealth + (Strengthlevel / 2).";
-	szInfo += "\n\n2. Superior Armor:\n   Startarmor + (Armorlevel / 2).";
+	string szInfo = "1. Strength:\n   Starthealth + (Strengthlevel / 2)."; if ( gOverPower ) szInfo += "\n   Also increases Maxhealth by (Strengthlevel / 2), up to 200.";
+	szInfo += "\n\n2. Superior Armor:\n   Startarmor + (Armorlevel / 2)."; if ( gOverPower ) szInfo += "\n   Also increases Maxarmor by (Armorlevel / 2), up to 200.";
 	szInfo += "\n\n3. Regeneration:\n   One HP every (158.0 - (Regenerationlevel / 3)) seconds\n   + Bonus chance every 0.5 seconds.";
 	szInfo += "\n\n4. Nano Armor:\n   One AP every (165.5 - (Nanoarmorlevel / 3)) seconds\n   + Bonus chance every 0.5 seconds.";
 	szInfo += "\n\n5. Ammo Reincarnation:\n   One clip for current weapon and a random clip every (95.5 - (Ammolevel * 2)) seconds.";
 	szInfo += "\n\n6. Anti-Gravity Device:\n   Lowers your gravity by (1.2)% per level. Hold Jump-Key!";
 	szInfo += "\n\n7. Awareness:\n   Generic skill which enhances many other skills a bit.";
-	szInfo += "\n\n8. Poder de Equipo:\n   Supports nearby teammates with HP and AP.";
+	szInfo += "\n\n8. Team Power:\n   Supports nearby teammates with HP and AP.";
 	szInfo += "\n\n9. Block Attack:\n   Chance on fully blocking any attack of (Blocklevel / 3)%.";
 	szInfo += "\n\n10. Medals:\n   Slighly enhances all other skills a bit.\n   Increases XP gain by (Medals * 3)%.\n   Can be used for special skills.";
 	
