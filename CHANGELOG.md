@@ -1,3 +1,9 @@
+## v3.72
+
+- New 'OVERPOWER' setting: Allow "Strength" and "Superior Armor" skills to increase maximum health/armor.
+- OverPower setting can be enabled/disabled globally by changing just one line of code.
+- Fixed skills info displaying "Team Power" in Spanish.
+
 ## v3.70
 
 - Updated save system, again. MAKE A BACKUP OF YOUR DATA BEFORE UPGRADING.
