@@ -1,3 +1,7 @@
+## v3.73
+
+- Fixed achievements not saving due to a regression.
+
 ## v3.72
 
 - New 'OVERPOWER' setting: Allow "Strength" and "Superior Armor" skills to increase maximum health/armor.
