@@ -16,8 +16,8 @@
 	along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const string version = "v3.72";
-const string lastupdate = "July 14th, 2022";
+const string version = "v3.73";
+const string lastupdate = "August 20th, 2023";
 
 const int SAVE_MIN_LEVEL = 1; // Min level required for data to be saved
 const int SAVE_MIN_ACHIEVEMENTS = 1; // Min achievements cleared for achievements to be saved
@@ -8479,8 +8479,8 @@ void InitVaults()
 					g_AchievementVaultData[ iArraySize - 1 ] = szLine;
 					
 					// Convert old v3.20/v3.21 to new save format
-					g_AchievementVaultData[ iArraySize - 1 ].Replace( "_", "" );
-					g_AchievementVaultData[ iArraySize - 1 ].Replace( "#", "" );
+					//g_AchievementVaultData[ iArraySize - 1 ].Replace( "_", "" );
+					//g_AchievementVaultData[ iArraySize - 1 ].Replace( "#", "" );
 				}
 			}
 			
