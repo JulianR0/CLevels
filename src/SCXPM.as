@@ -1,6 +1,6 @@
 /*
 	Imperium Sven Co-op's SCXPM: Main Script
-	Copyright (C) 2019-2022  Julian Rodriguez
+	Copyright (C) 2019-2023  Julian Rodriguez
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
 	along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const string version = "v3.73";
-const string lastupdate = "August 20th, 2023";
+const string version = "v3.73a";
+const string lastupdate = "September 13rd, 2023";
 
 const int SAVE_MIN_LEVEL = 1; // Min level required for data to be saved
 const int SAVE_MIN_ACHIEVEMENTS = 1; // Min achievements cleared for achievements to be saved
@@ -8476,11 +8476,25 @@ void InitVaults()
 				{
 					iArraySize++;
 					g_AchievementVaultData.resize( iArraySize );
-					g_AchievementVaultData[ iArraySize - 1 ] = szLine;
 					
-					// Convert old v3.20/v3.21 to new save format
-					//g_AchievementVaultData[ iArraySize - 1 ].Replace( "_", "" );
-					//g_AchievementVaultData[ iArraySize - 1 ].Replace( "#", "" );
+					array< string >@ key = szLine.Split( '\t' );
+					
+					string steamID = key[ 0 ];
+					string data = key[ 1 ];
+					
+					steamID.Trim();
+					data.Trim();
+					
+					if ( data.FindFirstOf( "#" ) != String::INVALID_INDEX )
+					{
+						// Convert old v3.20/v3.21 to new save format
+						data.Replace( "_", "" );
+						data.Replace( "#", "" );
+						
+						g_AchievementVaultData[ iArraySize - 1 ] = steamID + "\t" + data;
+					}
+					else
+						g_AchievementVaultData[ iArraySize - 1 ] = szLine;
 				}
 			}
 			
