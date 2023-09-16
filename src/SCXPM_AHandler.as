@@ -1,6 +1,6 @@
 /*
 	Imperium Sven Co-op's SCXPM: Achievements Handler
-	Copyright (C) 2019-2022  Julian Rodriguez
+	Copyright (C) 2019-2023  Julian Rodriguez
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -1159,6 +1159,48 @@ void MapActivate()
 		pEntity.KeyValue( "m_iszValueType", "0" );
 		
 		@g_SCTimer = @g_Scheduler.SetInterval( "intruder_check", 0.10, g_Scheduler.REPEAT_INFINITE_TIMES );
+	}
+	else if ( szMap == 'auspices' )
+	{
+		@pEntity = g_EntityFuncs.Create( "info_target", g_vecZero, g_vecZero, false );
+		pEntity.pev.targetname = "sys_adata";
+		
+		@pEntity = g_EntityFuncs.Create( "trigger_changevalue", g_vecZero, g_vecZero, false );
+		pEntity.pev.targetname = "multifinal12";
+		pEntity.pev.target = "sys_adata";
+		pEntity.KeyValue( "m_iszValueName", "$i_test" );
+		pEntity.KeyValue( "m_iszNewValue", "1" );
+		pEntity.KeyValue( "m_iszValueType", "0" );
+		
+		@g_SCTimer = @g_Scheduler.SetInterval( "auspices_check", 0.10, g_Scheduler.REPEAT_INFINITE_TIMES );
+	}
+	else if ( szMap == 'it_has_leaks' )
+	{
+		@pEntity = g_EntityFuncs.Create( "info_target", g_vecZero, g_vecZero, false );
+		pEntity.pev.targetname = "sys_adata";
+		
+		@pEntity = g_EntityFuncs.Create( "trigger_changevalue", g_vecZero, g_vecZero, false );
+		pEntity.pev.targetname = "it_end_text";
+		pEntity.pev.target = "sys_adata";
+		pEntity.KeyValue( "m_iszValueName", "$i_test" );
+		pEntity.KeyValue( "m_iszNewValue", "1" );
+		pEntity.KeyValue( "m_iszValueType", "0" );
+		
+		@g_SCTimer = @g_Scheduler.SetInterval( "it_has_leaks_check", 0.10, g_Scheduler.REPEAT_INFINITE_TIMES );
+	}
+	else if ( szMap == 'leprechaun3-2' )
+	{
+		@pEntity = g_EntityFuncs.Create( "info_target", g_vecZero, g_vecZero, false );
+		pEntity.pev.targetname = "sys_adata";
+		
+		@pEntity = g_EntityFuncs.Create( "trigger_changevalue", g_vecZero, g_vecZero, false );
+		pEntity.pev.targetname = "the_end_mm";
+		pEntity.pev.target = "sys_adata";
+		pEntity.KeyValue( "m_iszValueName", "$i_test" );
+		pEntity.KeyValue( "m_iszNewValue", "1" );
+		pEntity.KeyValue( "m_iszValueType", "0" );
+		
+		@g_SCTimer = @g_Scheduler.SetInterval( "leprechaun3_2_check", 0.10, g_Scheduler.REPEAT_INFINITE_TIMES );
 	}
 }
 
@@ -3176,6 +3218,125 @@ void intruder_check()
 							}
 						}
 					}
+				}
+			}
+		}
+		
+		g_EntityFuncs.Remove( pCheck );
+		return;
+	}
+}
+
+void auspices_check()
+{
+	if ( szMap != 'auspices' )
+		return;
+	
+	CBaseEntity@ pCheck = g_EntityFuncs.FindEntityByTargetname( null, "sys_adata" );
+	if ( pCheck is null )
+		return;
+	
+	CustomKeyvalues@ pKVD = pCheck.GetCustomKeyvalues();
+	
+	int iCheck = pKVD.GetKeyvalue( "$i_test" ).GetInteger();
+	if ( iCheck == 1 )
+	{
+		for ( int i = 1; i <= g_Engine.maxClients; i++ )
+		{
+			CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( i );
+			
+			if ( pPlayer !is null && pPlayer.IsConnected() )
+			{
+				// Under 3 deaths?
+				if ( pPlayer.m_iDeaths < 3 )
+				{
+					// To prevent abuse, player must have at least this much score
+					if ( pPlayer.pev.frags >= 60.0 ) // Max score is 400~ish. This is 15%
+					{
+						// Get!
+						CustomKeyvalues@ pUnlock = pPlayer.GetCustomKeyvalues();
+						pUnlock.SetKeyvalue( "$i_a_unlock", 56 );
+					}
+				}
+			}
+		}
+		
+		g_EntityFuncs.Remove( pCheck );
+		return;
+	}
+}
+
+void it_has_leaks_check()
+{
+	if ( szMap != 'it_has_leaks' )
+		return;
+	
+	CBaseEntity@ pCheck = g_EntityFuncs.FindEntityByTargetname( null, "sys_adata" );
+	if ( pCheck is null )
+		return;
+	
+	CustomKeyvalues@ pKVD = pCheck.GetCustomKeyvalues();
+	
+	int iCheck = pKVD.GetKeyvalue( "$i_test" ).GetInteger();
+	if ( iCheck == 1 )
+	{
+		for ( int i = 1; i <= g_Engine.maxClients; i++ )
+		{
+			CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( i );
+			
+			if ( pPlayer !is null && pPlayer.IsConnected() )
+			{
+				// Check whenever the player has no deaths
+				if ( pPlayer.m_iDeaths == 0 )
+				{
+					CustomKeyvalues@ pPlayerKVD = pPlayer.GetCustomKeyvalues();
+					
+					// Check if the player has the following handicaps activated
+					int iHandicap07 = pPlayerKVD.GetKeyvalue( "$i_handicap07" ).GetInteger();
+					if ( iHandicap07 == 1 )
+					{
+						// To prevent abuse, player must have at least this much score
+						if ( pPlayer.pev.frags >= 90.0 ) // 15%
+						{
+							// Get!
+							pPlayerKVD.SetKeyvalue( "$i_a_unlock", 57 );
+						}
+					}
+				}
+			}
+		}
+		
+		g_EntityFuncs.Remove( pCheck );
+		return;
+	}
+}
+
+void leprechaun3_2_check()
+{
+	if ( szMap != 'leprechaun3-2' )
+		return;
+	
+	CBaseEntity@ pCheck = g_EntityFuncs.FindEntityByTargetname( null, "sys_adata" );
+	if ( pCheck is null )
+		return;
+	
+	CustomKeyvalues@ pKVD = pCheck.GetCustomKeyvalues();
+	
+	int iCheck = pKVD.GetKeyvalue( "$i_test" ).GetInteger();
+	if ( iCheck == 1 )
+	{
+		for ( int i = 1; i <= g_Engine.maxClients; i++ )
+		{
+			CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( i );
+			
+			if ( pPlayer !is null && pPlayer.IsConnected() )
+			{
+				// To prevent abuse, player must have at least this much score
+				if ( pPlayer.pev.frags >= 46.0 ) // I forgot how I used to calculate this >.>. Taking aproximate of 1,150 max score. This is 4%.
+				{
+					// Get!
+					CustomKeyvalues@ pUnlock = pPlayer.GetCustomKeyvalues();
+					pUnlock.SetKeyvalue( "$i_a_unlock", 58 );
 				}
 			}
 		}

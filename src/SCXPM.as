@@ -16,12 +16,11 @@
 	along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const string version = "v3.73a";
-const string lastupdate = "September 13rd, 2023";
+const string version = "v4.00";
+const string lastupdate = "September 16th, 2023";
 
 const int SAVE_MIN_LEVEL = 1; // Min level required for data to be saved
 const int SAVE_MIN_ACHIEVEMENTS = 1; // Min achievements cleared for achievements to be saved
-const float SAVE_TIME = 2.0; // Save players levels/achievements every X.X time
 const bool ACHIEVEMENTS_ENABLED = true; // Enable/Disable achievements
 const bool ALWAYS_OVERPOWER = false; // Globally enable "overpower" setting
 
@@ -106,7 +105,10 @@ const array< string > szAchievementNames =
 	"That's the question",
 	"TAS-like",
 	"Unbalanced",
-	"Last Normalcy"
+	"Last Normalcy",
+	"Is that it?",
+	"Made in Quake",
+	"Tedious luck"
 };
 
 array< int > xp( 33 );
@@ -197,13 +199,14 @@ bool gNoSkills;
 bool gDelayedXP;
 bool gNoSpectate;
 bool gAllowHandicaps;
-bool gAllowPVPScore;
-bool gEnableFF;
 bool gNoGravity;
 bool gNoEvent;
 bool gNoHandicaps;
 bool gHideHUD;
 bool gOverPower;
+bool gNoSave;
+bool gSimulatedLevel;
+bool gLimitedRespawn;
 bool onecount;
 bool event_active;
 bool engage_mode;
@@ -223,10 +226,8 @@ int AMMO_SNIPER;
 int AMMO_SPORE;
 int AMMO_ROACH;
 
-array< bool > bMainDataExists( 33 );
-array< string > g_MainVaultData;
-array< bool > bAchievementDataExists( 33 );
-array< string > g_AchievementVaultData;
+dictionary g_MainVaultData;
+dictionary g_AchievementVaultData;
 bool bVaultsReady;
 
 dictionary pmenu_state;
@@ -266,8 +267,6 @@ void PluginInit()
 	g_Scheduler.SetInterval( "scxpm_amptask", 60.0, g_Scheduler.REPEAT_INFINITE_TIMES );
 	g_Scheduler.SetInterval( "scxpm_checkevent", 200.0, g_Scheduler.REPEAT_INFINITE_TIMES );
 	g_Scheduler.SetInterval( "spectate_fix", 0.1, g_Scheduler.REPEAT_INFINITE_TIMES );
-	
-	g_Scheduler.SetInterval( "DumpVaults", SAVE_TIME, g_Scheduler.REPEAT_INFINITE_TIMES );
 }
 
 void MapInit()
@@ -287,10 +286,11 @@ void MapInit()
 	g_Game.PrecacheModel( "models/w_medkit.mdl" );
 	g_CustomEntityFuncs.RegisterCustomEntity( "CFlyingMedkit", "scxpm_medkit_dart" );
 	g_CustomEntityFuncs.RegisterCustomEntity( "CDelayedXP", "scxpm_give_xp" );
-	g_CustomEntityFuncs.RegisterCustomEntity( "CFFToggler", "scxpm_toggle_ff" );
 	g_CustomEntityFuncs.RegisterCustomEntity( "CChangeXPGain", "scxpm_change_xpgain" );
 	g_CustomEntityFuncs.RegisterCustomEntity( "CSkillToggler", "scxpm_change_skills" );
 	g_CustomEntityFuncs.RegisterCustomEntity( "CHideHUD", "scxpm_hide_hud" );
+	g_CustomEntityFuncs.RegisterCustomEntity( "CSparkHandler", "scxpm_spark_handler" );
+	g_CustomEntityFuncs.RegisterCustomEntity( "CSimulateLevel", "scxpm_simulate_level" );
 	
 	gDisabled = false;
 	gNoAchievements = false;
@@ -300,13 +300,14 @@ void MapInit()
 	gDelayedXP = false;
 	gNoSpectate = false;
 	gAllowHandicaps = false;
-	gAllowPVPScore = false;
-	gEnableFF = false;
 	gNoEvent = false;
 	gNoGravity = false;
 	gNoHandicaps = false;
 	gHideHUD = false;
 	gOverPower = false;
+	gLimitedRespawn = false;
+	gNoSave = false;
+	gSimulatedLevel = false;
 	onecount = false;
 	can_edit_handicaps = true;
 	bSaveOldSkills = false;
@@ -342,9 +343,6 @@ void MapInit()
 			aData[ i ][ j ] = false;
 			aClaim[ i ][ j ] = false;
 		}
-		
-		bMainDataExists[ i ] = false;
-		bAchievementDataExists[ i ] = false;
 	}
 	
 	array< string >@ states = pmenu_state.getKeys();
@@ -402,12 +400,8 @@ void MapInit()
 							gNoSpectate = true;
 						else if ( pre_mode[ i ] == 'ALLOW_HANDICAPS' )
 							gAllowHandicaps = true;
-						else if ( pre_mode[ i ] == 'ALLOW_PVP_SCORE' )
-							gAllowPVPScore = true;
 						else if ( pre_mode[ i ] == 'NO_EVENT' )
 							gNoEvent = true;
-						else if ( pre_mode[ i ] == 'ENABLE_FF' )
-							gEnableFF = true;
 						else if ( pre_mode[ i ] == 'NO_ANTIGRAV' )
 							gNoGravity = true;
 						else if ( pre_mode[ i ] == 'NO_HANDICAPS' )
@@ -416,6 +410,12 @@ void MapInit()
 							gHideHUD = true;
 						else if ( pre_mode[ i ] == 'OVERPOWER' )
 							gOverPower = true;
+						else if ( pre_mode[ i ] == 'LIMITED_RESPAWN' )
+							gLimitedRespawn = true;
+						else if ( pre_mode[ i ] == 'NO_SAVE' )
+							gNoSave = true;
+						else if ( pre_mode[ i ] == 'SIMULATED_LEVEL' )
+							gSimulatedLevel = true;
 					}
 				}
 				
@@ -423,7 +423,7 @@ void MapInit()
 				MAP_XPGAIN = atof( pre_setting[ 2 ] );
 				if ( MAP_XPGAIN <= 0.00 ) MAP_XPGAIN = XP_DISABLED;
 				
-				if ( gSingleAchievement )
+				if ( gSingleAchievement || gLimitedRespawn || gSimulatedLevel )
 				{
 					pre_setting[ 3 ].Trim();
 					iAAllowed = atoi( pre_setting[ 3 ] );
@@ -435,12 +435,16 @@ void MapInit()
 	}
 	
 	if ( ALWAYS_OVERPOWER ) gOverPower = true;
-	g_Scheduler.SetTimeout( "scxpm_block_handicaps", 80.0 );
+	g_Scheduler.SetTimeout( "scxpm_block_handicaps", 120.0 );
 	
 	// Initialize vaults
-	bVaultsReady = false;
 	if ( !gDisabled )
-		InitVaults();
+	{
+		if ( bVaultsReady )
+			DumpVaults();
+		else
+			InitVaults();
+	}
 }
 
 void MapActivate()
@@ -461,6 +465,10 @@ void MapActivate()
 	
 	// Check time based events
 	scxpm_checkevent();
+	
+	// Create auxiliar entity if limited respawning is active
+	if ( gLimitedRespawn )
+		g_EntityFuncs.Create( "scxpm_spark_handler", g_vecZero, g_vecZero, false );
 }
 
 MenuHandler@ MenuGetPlayer( CBasePlayer@ pPlayer )
@@ -488,8 +496,6 @@ HookReturnCode ClientPutInServer( CBasePlayer@ pPlayer )
 	
 	lastfrags[ index ] = 0.0;
 	lastDeadflag[ index ] = 123;
-	bMainDataExists[ index ] = false;
-	bAchievementDataExists[ index ] = false;
 	loaddata[ index ] = false;
 	
 	scxpm_loaddata( index );
@@ -561,8 +567,6 @@ HookReturnCode ClientDisconnect( CBasePlayer@ pPlayer )
 	}
 	
 	loaddata[ index ] = false;
-	bMainDataExists[ index ] = false;
-	bAchievementDataExists[ index ] = false;
 	
 	return HOOK_CONTINUE;
 }
@@ -1035,7 +1039,7 @@ void spectate_fix()
 			if ( bIsSpectating[ i ] )
 			{
 				pPlayer.m_flRespawnDelayTime = Math.FLOAT_MAX;
-				pPlayer.pev.nextthink = g_Engine.time + 0.6;
+				pPlayer.pev.nextthink = g_Engine.time + 0.7;
 			}
 		}
 	}
@@ -1071,7 +1075,7 @@ void scxpm_checkevent()
 		}
 		g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "[SCXPM] Hello, \"Runaway\". You gain more XP while you avoid school time. Good luck!\n" );
 	}
-	else if ( hours >= 16 && hours < 19 ) // 16hs to 19hs (4 PM to 7 PM)
+	else if ( hours >= 16 && hours < 20 ) // 16hs to 19hs (4 PM to 8 PM)
 	{
 		if ( !event_active )
 		{
@@ -1096,7 +1100,12 @@ void scxpm_acmdhelp( const CCommand@ pArgs )
 	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_giveamp <Name> <Level> <Duration> - Increases a player's XP gain.\n" );
 	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_givepi <Name> <Value> <Title> <Description> - Give an XP Mod to a player.\n" );
 	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_setadata <Name> <Achievement ID> <Unlock> <Give Reward> - Locks or unlocks an achievement to a player.\n" );
+	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_force_handicap <Name> <Handicap> <Silent> - Forces a handicap to a player.\n" );
 	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_set_xpgain <Value> - OWNERS ONLY - Changes map's XP gain.\n\n" );
+	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_toggle_skills - OWNERS ONLY - Enables/Disables skills on this map.\n" );
+	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_toggle_overpower - OWNERS ONLY - Enables/Disables overpower on this map.\n" );
+	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_toggle_save - OWNERS ONLY - Enables/Disables player save on this map.\n" );
+	g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, ".xp_start_simulation <Level> - OWNERS ONLY - Enables simulation mode for the remainder of the map.\n\n" );
 }
 
 CClientCommand ADMIN_ADDXP( "xp_addxp", "<Name> <Amount> - Give XP to a player.", @scxpm_addxp, ConCommandFlag::AdminOnly );
@@ -1730,6 +1739,82 @@ void scxpm_setadata( const CCommand@ pArgs )
 		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Not enough parameters.\n" );
 }
 
+CClientCommand ADMIN_FORCEHANDICAP( "xp_force_handicap", "<Name> <Handicap> <Silent> - Forces a handicap to a player.", @scxpm_forcehandicap, ConCommandFlag::AdminOnly );
+void scxpm_forcehandicap( const CCommand@ pArgs )
+{
+	CBasePlayer@ pPlayer = g_ConCommandSystem.GetCurrentPlayer();
+	
+	if ( pArgs.ArgC() >= 4 )
+	{
+		bool bMultiple = false;
+		CBasePlayer@ pTarget = SCXPM_FindPlayer( pArgs[ 1 ], bMultiple );
+		
+		if ( bMultiple )
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Multiple players found. Be more specific.\n" );
+		else if ( pTarget !is null )
+		{
+			int iHC = atoi( pArgs[ 2 ] );
+			int silent = atoi( pArgs[ 3 ] );
+			int index = pTarget.entindex();
+			
+			if ( iHC > 15 )
+			{
+				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Invalid handicap.\n" );
+				return;
+			}
+			
+			// Get now the target's and the admin's name and steamid
+			string aname = pPlayer.pev.netname;
+			string asteamid = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+			string tname = pTarget.pev.netname;
+			string tsteamid = g_EngineFuncs.GetPlayerAuthId( pTarget.edict() );
+			
+			// Get keyvalues
+			CustomKeyvalues@ pHandicaps = pTarget.GetCustomKeyvalues();
+			
+			if ( iHC <= 0 ) // Remove all handicaps
+			{
+				for ( int HC = 0; HC <= 15; HC++ )
+				{
+					if ( HC < 10 )
+						pHandicaps.SetKeyvalue( "$i_force_handicap0" + string( HC ), 0 );
+					else
+						pHandicaps.SetKeyvalue( "$i_force_handicap" + string( HC ), 0 );
+				}
+				
+				g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") disabled all forced handicaps to " + tname + " (" + tsteamid + ") " + "\n" );
+				SCXPM_Log( aname + " (" + asteamid + ") disabled all forced handicaps to " + tname + " (" + tsteamid + ") " + "\n" );
+				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] All forced handicaps disabled.\n" );
+				
+				if ( silent == 0 )
+					g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Disable handicaps to " + tname + ".\n" );
+			}
+			else // Add
+			{
+				if ( iHC < 10 )
+					pHandicaps.SetKeyvalue( "$i_force_handicap0" + string( iHC ), 1 );
+				else
+					pHandicaps.SetKeyvalue( "$i_force_handicap" + string( iHC ), 1 );
+				
+				string szHandicapName = GetHandicapName( iHC );
+				
+				g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") enabled handicap [" + szHandicapName + "] to " + tname + " (" + tsteamid + ") " + "\n" );
+				SCXPM_Log( aname + " (" + asteamid + ") enabled handicap [" + szHandicapName + "] to " + tname + " (" + tsteamid + ") " + "\n" );
+				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Enabled handicap [" + szHandicapName + "].\n" );
+				
+				if ( silent == 0 )
+					g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Enable handicap [" + szHandicapName + "] on " + tname + "\n" );
+			}
+		}
+		else
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Player not found.\n" );
+	}
+	else if ( pArgs.ArgC() == 1 )
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Usage: .xp_force_handicap <Name> <Handicap> <Silent> - Forces a handicap to a player.\n" );
+	else
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Not enough parameters.\n" );
+}
+
 CClientCommand ADMIN_MAPXPGAIN( "xp_set_xpgain", "<Value> - OWNERS ONLY - Changes map's XP gain.", @scxpm_mapxpgain, ConCommandFlag::AdminOnly );
 void scxpm_mapxpgain( const CCommand@ pArgs )
 {
@@ -1770,6 +1855,180 @@ void scxpm_mapxpgain( const CCommand@ pArgs )
 			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Usage: .xp_set_xpgain <Value> - Changes map's XP gain.\n" );
 			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] NOTE: This only changes the map's BASE XP GAIN. It does not affect player's individual XP gain.\n" );
 			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Map's XP gain is currently on x" + fl2Decimals( MAP_XPGAIN ) + ".\n" );
+		}
+	}
+	else
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Access denied.\n" );
+}
+
+CClientCommand ADMIN_TOGGLESKILLS( "xp_toggle_skills", "- OWNERS ONLY - Enables/Disables skills on this map.", @scxpm_toggleskills, ConCommandFlag::AdminOnly );
+void scxpm_toggleskills( const CCommand@ pArgs )
+{
+	CBasePlayer@ pPlayer = g_ConCommandSystem.GetCurrentPlayer();
+	
+	AdminLevel_t alevel = g_PlayerFuncs.AdminLevel( pPlayer );
+	if ( alevel == ADMIN_OWNER )
+	{
+		// Toggle
+		if ( gNoSkills )
+			gNoSkills = false;
+		else
+			gNoSkills = true;
+		
+		// Get now the admin's name and steamid
+		string aname = pPlayer.pev.netname;
+		string asteamid = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+		
+		// Log messages
+		if ( gNoSkills )
+		{
+			g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") disabled all skills.\n" );
+			SCXPM_Log( aname + " (" + asteamid + ") disabled all skills.\n" );
+			
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Turn off all SCXPM skills.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Skills disabled.\n" );
+		}
+		else
+		{
+			g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") enabled all skills.\n" );
+			SCXPM_Log( aname + " (" + asteamid + ") enabled all skills.\n" );
+			
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Turn on all SCXPM skills.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Skills enabled.\n" );
+		}
+	}
+	else
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Access denied.\n" );
+}
+
+CClientCommand ADMIN_TOGGLEOVERPOWER( "xp_toggle_overpower", "- OWNERS ONLY - Enables/Disables overpower on this map.", @scxpm_toggleoverpower, ConCommandFlag::AdminOnly );
+void scxpm_toggleoverpower( const CCommand@ pArgs )
+{
+	CBasePlayer@ pPlayer = g_ConCommandSystem.GetCurrentPlayer();
+	
+	AdminLevel_t alevel = g_PlayerFuncs.AdminLevel( pPlayer );
+	if ( alevel == ADMIN_OWNER )
+	{
+		// Toggle
+		if ( gOverPower )
+			gOverPower = false;
+		else
+			gOverPower = true;
+		
+		// Get now the admin's name and steamid
+		string aname = pPlayer.pev.netname;
+		string asteamid = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+		
+		// Log messages
+		if ( gOverPower )
+		{
+			g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") enabled overpower setting.\n" );
+			SCXPM_Log( aname + " (" + asteamid + ") enabled overpower setting.\n" );
+			
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Enable overpowered skills.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Overpower enabled.\n" );
+		}
+		else
+		{
+			g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") disabled overpower setting.\n" );
+			SCXPM_Log( aname + " (" + asteamid + ") disabled overpower setting.\n" );
+			
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Disable overpowered skills.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Overpower disabled.\n" );
+		}
+	}
+	else
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Access denied.\n" );
+}
+
+CClientCommand ADMIN_TOGGLESAVE( "xp_toggle_save", "- SOLO DIRECTIVOS - Apaga/Enciende el guardado de niveles/logros en este mapa", @scxpm_togglesave, ConCommandFlag::AdminOnly );
+void scxpm_togglesave( const CCommand@ pArgs )
+{
+	CBasePlayer@ pPlayer = g_ConCommandSystem.GetCurrentPlayer();
+	
+	AdminLevel_t alevel = g_PlayerFuncs.AdminLevel( pPlayer );
+	if ( alevel == ADMIN_OWNER )
+	{
+		// Toggle
+		if ( gNoSave )
+			gNoSave = false;
+		else
+			gNoSave = true;
+		
+		// Get now the admin's name and steamid
+		string aname = pPlayer.pev.netname;
+		string asteamid = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+		
+		// Log messages
+		g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") activo/desactivo el guardado de niveles/logros\n" );
+		SCXPM_Log( aname + " (" + asteamid + ") activo/desactivo el guardado de niveles/logros\n" );
+		
+		if ( gNoSave )
+		{
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Apagar el guardado de niveles/logros\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Los datos ya no se guardan\n" );
+		}
+		else
+		{
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Encender el guardado de niveles/logros\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Los datos ahora se guardaran\n" );
+		}
+	}
+	else
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] ERROR: Acceso denegado\n" );
+}
+
+CClientCommand ADMIN_STARTSIMULATION( "xp_start_simulation", "<Level> - OWNERS ONLY - Enables simulation mode for the remainder of the map.", @scxpm_startsimulation, ConCommandFlag::AdminOnly );
+void scxpm_startsimulation( const CCommand@ pArgs )
+{
+	CBasePlayer@ pPlayer = g_ConCommandSystem.GetCurrentPlayer();
+	
+	AdminLevel_t alevel = g_PlayerFuncs.AdminLevel( pPlayer );
+	if ( alevel == ADMIN_OWNER )
+	{
+		if ( pArgs.ArgC() >= 2 )
+		{
+			if ( gSingleAchievement || gLimitedRespawn )
+			{
+				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Cannot enable simulation mode on this map.\n" );
+				return;
+			}
+			
+			if ( gSimulatedLevel )
+			{
+				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Simulation mode is already active.\n" );
+				return;
+			}
+			
+			int level = atoi( pArgs[ 1 ] );
+			
+			// No negative numbers
+			if ( level < 0 )
+			{
+				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] The level to simulate must be greater or equal than 0.\n" );
+				return;
+			}
+			
+			// Create simulated entity
+			CBaseEntity@ pSimulation = g_EntityFuncs.Create( "scxpm_simulate_level", g_vecZero, g_vecZero, true );
+			pSimulation.KeyValue( "level", string( level ) );
+			g_EntityFuncs.DispatchSpawn( pSimulation.edict() );
+			
+			// Get now the admin's name and steamid
+			string aname = pPlayer.pev.netname;
+			string asteamid = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+			
+			// Log messages
+			g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") enabled simulation mode (Level " + level + ").\n" );
+			SCXPM_Log( aname + " (" + asteamid + ") enabled simulation mode (Level " + level + ").\n" );
+			
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Enable simulation mode.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Simulation mode activated.\n" );
+		}
+		else if ( pArgs.ArgC() == 1 )
+		{
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Usage: .xp_start_simulation <Level> - OWNERS ONLY - Enables simulation mode for the remainder of the map.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] WARNING: Once enabled it cannot be turned off until map change.\n" );
 		}
 	}
 	else
@@ -1900,7 +2159,6 @@ void scxpm_sdac()
 	{
 		scxpm_showdata();
 		scxpm_reexp();
-		//DumpVaults();
 		onecount = false;
 	}
 	scxpm_regen();
@@ -1994,7 +2252,7 @@ void scxpm_handicaps( const int& in index, const int& in iPage = 0 )
 	if ( handicap7[ index ] ) percent += 18;
 	if ( handicap8[ index ] ) percent += 18;
 	if ( handicap9[ index ] ) percent += 13;
-	if ( handicap10[ index ] ) percent += 31;
+	if ( handicap10[ index ] ) percent += 22;
 	if ( handicap11[ index ] ) percent += 18;
 	if ( handicap12[ index ] ) percent += 31;
 	if ( handicap13[ index ] ) percent += 13;
@@ -2045,7 +2303,7 @@ void scxpm_handicaps( const int& in index, const int& in iPage = 0 )
 	if ( handicap9[ index ] ) hc9text += "[ YES ]\n\n";
 	else hc9text += "[ NO ]\n";
 	
-	string hc10text = "Friendly Fire ";
+	string hc10text = "Dirty Mag ";
 	if ( handicap10[ index ] ) hc10text += "[ YES ]\n\n";
 	else hc10text += "[ NO ]\n";
 	
@@ -4405,6 +4663,29 @@ void scxpm_updatehc()
 						}
 					}
 				}
+				
+				// Dirty Mag handicap
+				if ( handicap10[ i ] )
+				{
+					CBasePlayerItem@ pCurrentItem = cast< CBasePlayerItem@ >( pPlayer.m_hActiveItem.GetEntity() );
+					if ( pCurrentItem !is null )
+					{
+						CBasePlayerWeapon@ pCurrentWeapon = pCurrentItem.GetWeaponPtr();
+						if ( pCurrentWeapon !is null )
+						{
+							if ( pCurrentWeapon.m_fInReload )
+							{
+								if ( pCurrentWeapon.m_iClip != -1 )
+									pCurrentWeapon.m_iClip = 0;
+								if ( pCurrentWeapon.m_iClip2 != -1 )
+								{
+									if ( pCurrentWeapon.m_iId != WEAPON_M16 )
+										pCurrentWeapon.m_iClip2 = 0;
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -4469,20 +4750,6 @@ HookReturnCode PlayerKilled( CBasePlayer@ pPlayer, CBaseEntity@ pAttacker, int i
 	if ( gDisabled )
 		return HOOK_CONTINUE;
 	
-	// Disallow players from gaining XP caused by friendly fire handicap
-	if ( pAttacker.IsPlayer() && pAttacker !is pPlayer )
-	{
-		// If this is a PvP map, allow the score
-		if ( !gAllowPVPScore )
-		{
-			// Not a PvP map. Remove the score!
-			pAttacker.pev.frags -= 1.0;
-		}
-		
-		// A player death should also be counted as a normal death
-		pPlayer.m_iDeaths++;
-	}
-	
 	// Skills disabled and handicaps NOT allowed
 	if ( gNoSkills && !gAllowHandicaps )
 		return HOOK_CONTINUE;
@@ -4536,34 +4803,38 @@ HookReturnCode WeaponTertiaryAttack( CBasePlayer@ pPlayer, CBasePlayerWeapon@ pW
 	if ( gDisabled || gNoSkills )
 		return HOOK_CONTINUE;
 	
-	int index = pPlayer.entindex();
-	if ( ( bData[ index ] & SS_RANGEHEAL ) != 0 && !handicap9[ index ] )
+	// No idea why sometimes pPlayer is NULL here
+	if ( pPlayer !is null )
 	{
-		// Medkit only
-		if ( pWeapon.m_iId == WEAPON_MEDKIT )
+		int index = pPlayer.entindex();
+		if ( ( bData[ index ] & SS_RANGEHEAL ) != 0 && !handicap9[ index ] )
 		{
-			// Don't spam
-			if ( g_Engine.time > pWeapon.m_flNextTertiaryAttack )
+			// Medkit only
+			if ( pWeapon.m_iId == WEAPON_MEDKIT )
 			{
-				int iAmmo = int( g_EngineFuncs.CVarGetFloat( "sk_plr_HpMedic" ) );
-				
-				// Enough ammo for this?
-				if ( pPlayer.m_rgAmmo( AMMO_MEDKIT ) >= iAmmo )
+				// Don't spam
+				if ( g_Engine.time > pWeapon.m_flNextTertiaryAttack )
 				{
-					// Get aiment
-					g_EngineFuncs.MakeVectors( pPlayer.pev.v_angle );
+					int iAmmo = int( g_EngineFuncs.CVarGetFloat( "sk_plr_HpMedic" ) );
 					
-					// Create medkit
-					CBaseEntity@ pMedkit = g_EntityFuncs.Create( "scxpm_medkit_dart", pPlayer.pev.origin + g_Engine.v_forward * 16, pPlayer.pev.angles, true, pPlayer.edict() );
-					pMedkit.KeyValue( "forward_vector", g_Engine.v_forward.ToString() );
-					g_EntityFuncs.DispatchSpawn( pMedkit.edict() );
+					// Enough ammo for this?
+					if ( pPlayer.m_rgAmmo( AMMO_MEDKIT ) >= iAmmo )
+					{
+						// Get aiment
+						g_EngineFuncs.MakeVectors( pPlayer.pev.v_angle );
+						
+						// Create medkit
+						CBaseEntity@ pMedkit = g_EntityFuncs.Create( "scxpm_medkit_dart", pPlayer.pev.origin + g_Engine.v_forward * 16, pPlayer.pev.angles, true, pPlayer.edict() );
+						pMedkit.KeyValue( "forward_vector", g_Engine.v_forward.ToString() );
+						g_EntityFuncs.DispatchSpawn( pMedkit.edict() );
+						
+						// Decrement ammo
+						pPlayer.m_rgAmmo( AMMO_MEDKIT, pPlayer.m_rgAmmo( AMMO_MEDKIT ) - iAmmo );
+					}
 					
-					// Decrement ammo
-					pPlayer.m_rgAmmo( AMMO_MEDKIT, pPlayer.m_rgAmmo( AMMO_MEDKIT ) - iAmmo );
+					// Wait 'till this time
+					pWeapon.m_flNextTertiaryAttack = g_Engine.time + 0.5;
 				}
-				
-				// Wait 'till this time
-				pWeapon.m_flNextTertiaryAttack = g_Engine.time + 0.5;
 			}
 		}
 	}
@@ -4694,7 +4965,7 @@ void scxpm_client_spawn( const int& in index )
 	if ( lastDeadflag[ index ] == 123 )
 	{
 		// Just joined, tell the player about current map settings, if applicable
-		g_Scheduler.SetTimeout( "scxpm_latesettings", 10.0, index ); // can't send the message this quickly, wait
+		g_Scheduler.SetTimeout( "scxpm_latesettings", 12.3, index ); // can't send the message this quickly, wait
 		
 		// Get the map's default max HP/AP for this player
 		maxhealth = pPlayer.pev.max_health;
@@ -4704,6 +4975,30 @@ void scxpm_client_spawn( const int& in index )
 	if ( pPlayer !is null && pPlayer.IsConnected() )
 	{
 		bIsSpectating[ index ] = false;
+		
+		if ( gLimitedRespawn )
+		{
+			CBaseEntity@ pSparkHandler = g_EntityFuncs.FindEntityByClassname( null, "scxpm_spark_handler" );
+			if ( pSparkHandler !is null )
+			{
+				if ( pPlayer.pev.health > ( maxhealth / 2.0 ) )
+				{
+					// player respawned
+					pSparkHandler.Use( pPlayer, pPlayer, USE_TOGGLE, 0.0f );
+				}
+				else if ( lastDeadflag[ index ] == 123 )
+				{
+					// just joined
+					pSparkHandler.Use( pPlayer, null, USE_TOGGLE, 0.0f );
+				}
+			}
+			else
+			{
+				g_Game.AlertMessage( at_logged, "[SCXPM] ERROR: Can't find entity \"scxpm_spark_handler\". LIMITED_RESPAWN disabled.\n" );
+				SCXPM_Log( "ERROR: Can't find entity \"scxpm_spark_handler\". LIMITED_RESPAWN disabled.\n" );
+				gLimitedRespawn = false;
+			}
+		}
 		
 		// Skills disabled, end here.
 		if ( gNoSkills )
@@ -4753,7 +5048,7 @@ void scxpm_client_spawn( const int& in index )
 				{
 					// These aren't real monsters...
 					string cname = ent.pev.classname;
-					if ( cname != "monster_generic" && cname != "monster_furniture" )
+					if ( cname.StartsWith( "monster_" ) && cname != "monster_generic" && cname != "monster_furniture" )
 					{
 						// IsPlayerAlly() will cause false positives if monsters are spawned in.... bizzare ways.
 						// This might not work with all monsters
@@ -4808,8 +5103,8 @@ void scxpm_latesettings( const int& in index )
 		if ( gNoGravity )
 			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] The \"Anti-Gravity Device\" skill has been disabled on this map.\n" );
 		
-		if ( gEnableFF && !gAllowPVPScore )
-			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] Friendly Fire is enabled on this map. Beware!\n" );
+		if ( gSimulatedLevel )
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] Your current level is being simulated. Your real level will be restored at map end.\n" );
 	}
 }
 
@@ -4871,27 +5166,6 @@ HookReturnCode PlayerTakeDamage( DamageInfo@ diData )
 	CBasePlayer@ pPlayer = cast< CBasePlayer@ >( g_EntityFuncs.Instance( pStupidThing ) );
 	
 	int index = pPlayer.entindex();
-	float ffCVAR = g_EngineFuncs.CVarGetFloat( "mp_friendlyfire" );
-	
-	// Crappy copypaste is crappy fix
-	if ( gEnableFF && ffCVAR != -1.0 || ffCVAR >= 1.0 )
-	{
-		// Another player trying to hurt this person?
-		if ( diData.pAttacker !is null )
-		{
-			CBaseEntity@ pevAttacker = diData.pAttacker;
-			CBaseEntity@ pevInflictor = diData.pInflictor;
-			CBaseEntity@ pevOwner = g_EntityFuncs.Instance( pevInflictor.pev.owner );
-			
-			if ( pevAttacker.Classify() == CLASS_PLAYER || pevOwner !is null && pevOwner.Classify() == CLASS_PLAYER )
-			{
-				// Since this is a PRE hook, we change the classify to allow the damage
-				// Then after a very short while, reverse the change (POST)
-				pPlayer.KeyValue( "classify", "-1" );
-				g_Scheduler.SetTimeout( "PlayerTakeDamage_Post", 0.000001, index );
-			}
-		}
-	}
 	
 	// Handicaps should be allowed
 	if ( !gNoSkills || gAllowHandicaps )
@@ -4901,11 +5175,15 @@ HookReturnCode PlayerTakeDamage( DamageInfo@ diData )
 		{
 			if ( !FNullEnt( pPlayer.pev.dmg_inflictor ) ) // Should exclude worldspawn (falldamage)
 			{
-				// Do not continuously poison the player if it is not taking any damage
-				if ( diData.pAttacker.entindex() != 0 && diData.pInflictor.entindex() != index )
+				// Again, why?
+				if ( diData.pAttacker !is null )
 				{
-					// Set all damage to poison
-					diData.bitsDamageType |= DMG_POISON;
+					// Do not continuously poison the player if it is not taking any damage
+					if ( diData.pAttacker.entindex() != 0 && diData.pInflictor.entindex() != index )
+					{
+						// Set all damage to poison
+						diData.bitsDamageType |= DMG_POISON;
+					}
 				}
 			}
 		}
@@ -4924,33 +5202,6 @@ HookReturnCode PlayerTakeDamage( DamageInfo@ diData )
 					float flNewDamage = diData.flDamage;
 					flNewDamage = flNewDamage * 175.0 / 100.0;
 					diData.flDamage = flNewDamage;
-				}
-			}
-		}
-		
-		// Friendly Fire handicap or FF setting is on
-		if ( handicap10[ index ] && !gEnableFF && ffCVAR >= 0.0 ) // don't overlap with global FF setting
-		{
-			// Another player trying to hurt this person?
-			if ( diData.pAttacker !is null )
-			{
-				if ( diData.pAttacker.Classify() == CLASS_PLAYER )
-				{
-					// Ignore self-damage, as this would let the player use explosives to kill other players!
-					if ( diData.pAttacker.entindex() != index )
-					{
-						// HOLY CASTS ARCEUS!
-						CBasePlayerItem@ pCurrentWeapon = cast< CBasePlayerItem@ >( cast< CBasePlayer@ >( diData.pAttacker ).m_hActiveItem.GetEntity() );
-						
-						// Prevent accidental friendly fire from these weapons
-						if ( pCurrentWeapon.pev.classname != "weapon_shockrifle" && pCurrentWeapon.pev.classname != "weapon_grapple" )
-						{
-							// Since this is a PRE hook, we change the classify to allow the damage
-							// Then after a very short while, reverse the change (POST)
-							pPlayer.KeyValue( "classify", "-1" );
-							g_Scheduler.SetTimeout( "PlayerTakeDamage_Post", 0.000001, index );
-						}
-					}
 				}
 			}
 		}
@@ -4987,14 +5238,6 @@ HookReturnCode PlayerTakeDamage( DamageInfo@ diData )
 	}
 	
 	return HOOK_CONTINUE;
-}
-void PlayerTakeDamage_Post( const int& in index )
-{
-	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
-	if ( pPlayer !is null && pPlayer.IsConnected() )
-	{
-		pPlayer.KeyValue( "classify", "2" ); // 2 = CLASS_PLAYER
-	}
 }
 
 void gravityon( const int& in index )
@@ -5784,7 +6027,7 @@ void scxpm_version( const int& in index )
 	
 	szInfo += "\n\nThanks to:\n\nAngel\nMaty\nSneaky EmA\nw00tguy\nSolokiller\nfgsfds\nAMX Mod X Team\n";
 	
-	szInfo += "\n\n\n---\n2009-2022 - Imperium Sven Co-op";
+	szInfo += "\n\n\n---\n2009-2023 - Imperium Sven Co-op";
 	
 	ShowMOTD( pPlayer, "About", szInfo );
 }
@@ -5823,7 +6066,7 @@ void scxpm_hcinfo( const int& in index )
 	szInfo += "\n\n7. Limited Equipment:\n   Restricts your equipment to only one weapon.\n   +18% XP gain.";
 	szInfo += "\n\n8. Dead Weight:\n   Increases your gravity, it's harder to jump.\n   +18% XP gain.";
 	szInfo += "\n\n9. Lacking Help:\n   Partially disables the effects of Medals and Special Skills.\n   (Ubercharge and Red Cross are unaffected).\n   +13% XP gain.";
-	szInfo += "\n\n10. Friendly Fire:\n   Attacks done by other players will hurt you.\n   +31% XP gain.";
+	szInfo += "\n\n10. Dirty Mag:\n   Any ammo left unused on the magazine is lost in the next reload.\n   +22% XP gain.";
 	szInfo += "\n\n11. Lost Bullets:\n   Restricts your weapon's ammunition to only one clip.\n   +18% XP gain.";
 	szInfo += "\n\n12. Weak Restart:\n   Reviving or respawning will force your status to 25 HP and 0 AP.\n   +31% XP gain.";
 	szInfo += "\n\n13. Dangerous Waters:\n   Instant drowing when underwater.\n   +13% XP gain.";
@@ -6348,7 +6591,7 @@ void DailyReward( const int& in index, int& in iDays, bool bUpdate, string& out 
 	else iNext = 50 * ( iDays + 1 );
 	
 	// Set strings for current reward
-	if ( iDays >= 365 && !HasPermaIncrease( index, "Eternal" ) ) // I'm going to get drunk if someone gets this... -Giegue
+	if ( iDays >= 365 && !HasPermaIncrease( index, "Eternal" ) ) // Daily rewards are no longer lost so this is possible to obtain now. -Giegue
 		szCurrent = "Honorific Mention";
 	else if ( iDays >= 120 && !HasPermaIncrease( index, "Addict" ) || iDays >= 90 && !HasPermaIncrease( index, "Fanatic" ) || iDays >= 60 && !HasPermaIncrease( index, "Dedicated" ) || iDays >= 30 && !HasPermaIncrease( index, "Installed" ) )
 		szCurrent = "XP Mod +10%";
@@ -6365,7 +6608,7 @@ void DailyReward( const int& in index, int& in iDays, bool bUpdate, string& out 
 	
 	// Set string for next reward
 	int iDaysNext = iDays + 1;
-	if ( iDaysNext >= 365 && !HasPermaIncrease( index, "Eternal" ) ) // I'm going to get drunk if someone gets this... -Giegue
+	if ( iDaysNext >= 365 && !HasPermaIncrease( index, "Eternal" ) )
 		szCurrent = "Honorific Mention";
 	else if ( iDaysNext >= 120 && !HasPermaIncrease( index, "Addict" ) || iDaysNext >= 90 && !HasPermaIncrease( index, "Fanatic" ) || iDaysNext >= 60 && !HasPermaIncrease( index, "Dedicated" ) || iDaysNext >= 30 && !HasPermaIncrease( index, "Installed" ) )
 		szCurrent = "XP Mod +10%";
@@ -6388,7 +6631,7 @@ void DailyReward( const int& in index, int& in iDays, bool bUpdate, string& out 
 		nextdaily[ index ] = dtCurrentTime;
 		
 		// Give rewards
-		if ( iDays >= 365 && !HasPermaIncrease( index, "Eternal" ) ) // No sane person will get this but DON'T UNDERESTIMATE THE INTERNET.
+		if ( iDays >= 365 && !HasPermaIncrease( index, "Eternal" ) )
 		{
 			string szMessage = "";
 			szMessage += "This being has made it very clear that it's";
@@ -6469,6 +6712,10 @@ void DailyReward( const int& in index, int& in iDays, bool bUpdate, string& out 
 
 void scxpm_savedata( const int& in index )
 {
+	// Saving disabled
+	if ( gNoSave )
+		return;
+	
 	// Do not write into this vault unless it is absolutely safe to do so!
 	if ( !loaddata[ index ] )
 		return;
@@ -6482,132 +6729,60 @@ void scxpm_savedata( const int& in index )
 		return;
 	
 	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
-	if ( pPlayer !is null && pPlayer.IsConnected() )
+	string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+	
+	// No SteamID retrieved, abort!
+	if ( szSteamID.Length() < 2 )
+		return;
+		
+	string stuff;
+	
+	/* Main data */
+	
+	// Don't save simulated data
+	if ( !gSimulatedLevel )
 	{
-		string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+		// Update data
+		stuff += string( xp[ index ] ) + "#" + medals[ index ];
+		stuff += "#" + health[ index ] + "#" + armor[ index ] + "#" + rhealth[ index ] + "#" + rarmor[ index ] + "#" + rammo[ index ] + "#" + gravity[ index ] + "#" + speed[ index ] + "#" + dist[ index ] + "#" + dodge[ index ];
+		stuff += "#" + spawndmg[ index ] + "#" + ubercharge[ index ] + "#" + fastheal[ index ] + "#" + demoman[ index ] + "#" + practiceshot[ index ] + "#" + bioelectric[ index ] + "#" + redcross[ index ];
+		stuff += "#" + bData[ index ];
+		stuff += "#" + hud_red1[ index ] + "#" + hud_green1[ index ] + "#" + hud_blue1[ index ] + "#" + hud_red2[ index ] + "#" + hud_green2[ index ] + "#" + hud_blue2[ index ] + "#" + hud_alpha[ index ];
+		stuff += "#" + hud_pos_x[ index ] + "#" + hud_pos_y[ index ] + "#" + hud_effect[ index ] + "#" + hud_ef_fadein[ index ] + "#" + hud_ef_scantime[ index ];
+		stuff += "#" + expamp[ index ] + "#" + expamptime[ index ];
+		stuff += "#" + firstplay[ index ].ToUnixTimestamp() + "#" + nextdaily[ index ].ToUnixTimestamp() + "#" + dailyget[ index ];
+		stuff += "#" + bHandicaps[ index ];
 		
-		// No SteamID retrieved, abort!
-		if ( szSteamID.Length() < 2 )
-			return;
-		
-		// The fewer the I/O file operations it has to do the better, right?
-		
-		// Main data for this player does not exist, add it
-		if ( !bMainDataExists[ index ] )
-		{
-			string stuff;
-			stuff = szSteamID + "\t";
-			
-			stuff += string( xp[ index ] ) + "#" + medals[ index ];
-			stuff += "#" + health[ index ] + "#" + armor[ index ] + "#" + rhealth[ index ] + "#" + rarmor[ index ] + "#" + rammo[ index ] + "#" + gravity[ index ] + "#" + speed[ index ] + "#" + dist[ index ] + "#" + dodge[ index ];
-			stuff += "#" + spawndmg[ index ] + "#" + ubercharge[ index ] + "#" + fastheal[ index ] + "#" + demoman[ index ] + "#" + practiceshot[ index ] + "#" + bioelectric[ index ] + "#" + redcross[ index ];
-			stuff += "#" + bData[ index ];
-			stuff += "#" + hud_red1[ index ] + "#" + hud_green1[ index ] + "#" + hud_blue1[ index ] + "#" + hud_red2[ index ] + "#" + hud_green2[ index ] + "#" + hud_blue2[ index ] + "#" + hud_alpha[ index ];
-			stuff += "#" + hud_pos_x[ index ] + "#" + hud_pos_y[ index ] + "#" + hud_effect[ index ] + "#" + hud_ef_fadein[ index ] + "#" + hud_ef_scantime[ index ];
-			stuff += "#" + expamp[ index ] + "#" + expamptime[ index ];
-			stuff += "#" + firstplay[ index ].ToUnixTimestamp() + "#" + nextdaily[ index ].ToUnixTimestamp() + "#" + dailyget[ index ];
-			stuff += "#" + bHandicaps[ index ];
-			
-			g_MainVaultData.insertLast( stuff );
-			bMainDataExists[ index ] = true;
-		}
+		g_MainVaultData[ szSteamID ] = stuff;
+	}
+	
+	/* Achievement data */
+	
+	// Not enough achievements unlocked? End here
+	if ( GetAchievementClear( index ) < SAVE_MIN_ACHIEVEMENTS )
+		return;
+	
+	stuff = ""; // have to initialize
+	
+	CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
+	
+	for ( uint i = 0; i < szAchievementNames.length(); i++ )
+	{
+		if ( aData[ index ][ i ] )
+			stuff += "1" + ( aClaim[ index ][ i ] ? "1" : "0" );
 		else
 		{
-			// Go through the vault
-			for ( uint uiVaultIndex = 0; uiVaultIndex < g_MainVaultData.length(); uiVaultIndex++ )
+			if ( pCustom.HasKeyvalue( "$i_sys_a_" + string( i ) ) )
 			{
-				// Update our data?
-				if ( g_MainVaultData[ uiVaultIndex ].StartsWith( szSteamID ) )
-				{
-					string stuff;
-					stuff = szSteamID + "\t";
-					
-					stuff += string( xp[ index ] ) + "#" + medals[ index ];
-					stuff += "#" + health[ index ] + "#" + armor[ index ] + "#" + rhealth[ index ] + "#" + rarmor[ index ] + "#" + rammo[ index ] + "#" + gravity[ index ] + "#" + speed[ index ] + "#" + dist[ index ] + "#" + dodge[ index ];
-					stuff += "#" + spawndmg[ index ] + "#" + ubercharge[ index ] + "#" + fastheal[ index ] + "#" + demoman[ index ] + "#" + practiceshot[ index ] + "#" + bioelectric[ index ] + "#" + redcross[ index ];
-					stuff += "#" + bData[ index ];
-					stuff += "#" + hud_red1[ index ] + "#" + hud_green1[ index ] + "#" + hud_blue1[ index ] + "#" + hud_red2[ index ] + "#" + hud_green2[ index ] + "#" + hud_blue2[ index ] + "#" + hud_alpha[ index ];
-					stuff += "#" + hud_pos_x[ index ] + "#" + hud_pos_y[ index ] + "#" + hud_effect[ index ] + "#" + hud_ef_fadein[ index ] + "#" + hud_ef_scantime[ index ];
-					stuff += "#" + expamp[ index ] + "#" + expamptime[ index ];
-					stuff += "#" + firstplay[ index ].ToUnixTimestamp() + "#" + nextdaily[ index ].ToUnixTimestamp() + "#" + dailyget[ index ];
-					stuff += "#" + bHandicaps[ index ];
-					
-					g_MainVaultData[ uiVaultIndex ] = stuff;
-					break;
-				}
-			}
-			
-			// Achievements globally disabled. End here
-			if ( !ACHIEVEMENTS_ENABLED )
-				return;
-			
-			// Not enough achievements unlocked? End here
-			if ( GetAchievementClear( index ) < SAVE_MIN_ACHIEVEMENTS )
-				return;
-			
-			// Main data must have priority, so achievement data check goes here
-			if ( !bAchievementDataExists[ index ] )
-			{
-				string stuff;
-				stuff = szSteamID + "\t";
-				
-				CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
-				
-				for ( uint i = 0; i < szAchievementNames.length(); i++ )
-				{
-					if ( aData[ index ][ i ] )
-						stuff += "1" + ( aClaim[ index ][ i ] ? "1" : "0" );
-					else
-					{
-						if ( pCustom.HasKeyvalue( "$i_sys_a_" + string( i ) ) )
-						{
-							int iProgress = pCustom.GetKeyvalue( "$i_sys_a" + string( i ) ).GetInteger();
-							stuff += "0" + iProgress;
-						}
-						else
-							stuff += "00";
-					}
-				}
-				
-				g_AchievementVaultData.insertLast( stuff );
-				bAchievementDataExists[ index ] = true;
+				int iProgress = pCustom.GetKeyvalue( "$i_sys_a_" + string( i ) ).GetInteger();
+				stuff += "0" + iProgress;
 			}
 			else
-			{
-				// Go through the vault
-				for ( uint uiVaultIndex = 0; uiVaultIndex < g_AchievementVaultData.length(); uiVaultIndex++ )
-				{
-					// Update our data?
-					if ( g_AchievementVaultData[ uiVaultIndex ].StartsWith( szSteamID ) )
-					{
-						string stuff;
-						stuff = szSteamID + "\t";
-						
-						CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
-						
-						for ( uint i = 0; i < szAchievementNames.length(); i++ )
-						{
-							if ( aData[ index ][ i ] )
-								stuff += "1" + ( aClaim[ index ][ i ] ? "1" : "0" );
-							else
-							{
-								if ( pCustom.HasKeyvalue( "$i_sys_a_" + string( i ) ) )
-								{
-									int iProgress = pCustom.GetKeyvalue( "$i_sys_a" + string( i ) ).GetInteger();
-									stuff += "0" + iProgress;
-								}
-								else
-									stuff += "00";
-							}
-						}
-						
-						g_AchievementVaultData[ uiVaultIndex ] = stuff;
-						break;
-					}
-				}
-			}
+				stuff += "00";
 		}
 	}
+	
+	g_AchievementVaultData[ szSteamID ] = stuff;
 }
 
 void scxpm_loaddata( const int& in index )
@@ -6618,205 +6793,221 @@ void scxpm_loaddata( const int& in index )
 	
 	// Prepare to go through the vaults
 	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
-	if ( pPlayer !is null && pPlayer.IsConnected() )
+	string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+	
+	// No SteamID retrieved, abort!
+	if ( szSteamID.Length() < 2 )
+		return;
+	
+	// Main data
+	if ( g_MainVaultData.exists( szSteamID ) )
 	{
-		string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+		// Data exists, retrieve
+		string data = string( g_MainVaultData[ szSteamID ] );
+		data.Trim();
+		array< string >@ config = data.Split( '#' );
 		
-		// SteamID not yet known. Wait!
-		if ( szSteamID.Length() < 2 )
+		for ( uint uiDataLength = 0; uiDataLength < config.length(); uiDataLength++ )
 		{
-			g_Scheduler.SetTimeout( "scxpm_loaddata", SAVE_TIME, index );
-			return;
+			config[ uiDataLength ].Trim();
 		}
 		
-		// Main data
-		for ( uint uiVaultIndex = 0; uiVaultIndex < g_MainVaultData.length(); uiVaultIndex++ )
+		// Always load this first
+		bData[ index ] = atoi( config[ 18 ] );
+		
+		// Simulation Mode is enabled, only load essential data
+		if ( !gSimulatedLevel )
 		{
-			array< string >@ key = g_MainVaultData[ uiVaultIndex ].Split( '\t' );
+			xp[ index ] = atoi( config[ 0 ] );
+			medals[ index ] = atoi( config[ 1 ] );
+			health[ index ] = atoi( config[ 2 ] );
+			armor[ index ] = atoi( config[ 3 ] );
+			rhealth[ index ] = atoi( config[ 4 ] );
+			rarmor[ index ] = atoi( config[ 5 ] );
+			rammo[ index ] = atoi( config[ 6 ] );
+			gravity[ index ] = atoi( config[ 7 ] );
+			speed[ index ] = atoi( config[ 8 ] );
+			dist[ index ] = atoi( config[ 9 ] );
+			dodge[ index ] = atoi( config[ 10 ] );
+			spawndmg[ index ] = atoi( config[ 11 ] );
+			ubercharge[ index ] = atoi( config[ 12 ] );
+			fastheal[ index ] = atoi( config[ 13 ] );
+			demoman[ index ] = atoi( config[ 14 ] );
+			practiceshot[ index ] = atoi( config[ 15 ] );
+			bioelectric[ index ] = atoi( config[ 16 ] );
+			redcross[ index ] = atoi( config[ 17 ] );
+			expamp[ index ] = atoi( config[ 31 ] );
+			expamptime[ index ] = atoi( config[ 32 ] );
+			nextdaily[ index ].SetUnixTimestamp( atoi( config[ 34 ] ) );
+			dailyget[ index ] = atoi( config[ 35 ] );
+			bHandicaps[ index ] = atoi( config[ 36 ] );
 			
-			// This is our SteamID?
-			string szCheck = key[ 0 ];
-			szCheck.Trim();
-			if ( szSteamID == szCheck )
+			playerlevel[ index ] = scxpm_calc_lvl( xp[ index ] );
+			scxpm_calcneedxp( index );
+			scxpm_calc_points( index ); // skillpoints
+			
+			scxpm_amptask(); // Force check
+			
+			int iCheck = CheckDaily( index, DateTime( UnixTimestamp() ), nextdaily[ index ] );
+			if ( iCheck == 1 )
+				g_Scheduler.SetTimeout( "scxpm_dailyrewards", 30.0, index, ( dailyget[ index ] + 1 ) );
+			else if ( iCheck == -1 )
 			{
-				// It is, retrieve data
-				string data = key[ 1 ];
-				data.Trim();
-				array< string >@ config = data.Split( '#' );
-				
-				for ( uint uiDataLength = 0; uiDataLength < config.length(); uiDataLength++ )
+				string dummy;
+				DailyReward( index, 0, false, dummy, dummy );
+			}
+			
+			// Check if handicaps are allowed on this map
+			if ( !gNoSkills && !gNoHandicaps || gAllowHandicaps )
+			{
+				// Enabled. Autoselection turned on?
+				if ( ( bData[ index ] & HC_AUTOSELECT ) != 0 )
 				{
-					config[ uiDataLength ].Trim();
-				}
-				
-				int offset = 0;
-				if ( config.length() == 39 )
-				{
-					// Old v3.20/v3.21 save data
-					offset = 2;
-				}
-				
-				xp[ index ] = atoi( config[ 0 ] );
-				medals[ index ] = atoi( config[ 1 + offset ] );
-				health[ index ] = atoi( config[ 2 + offset ] );
-				armor[ index ] = atoi( config[ 3 + offset ] );
-				rhealth[ index ] = atoi( config[ 4 + offset ] );
-				rarmor[ index ] = atoi( config[ 5 + offset ] );
-				rammo[ index ] = atoi( config[ 6 + offset ] );
-				gravity[ index ] = atoi( config[ 7 + offset ] );
-				speed[ index ] = atoi( config[ 8 + offset ] );
-				dist[ index ] = atoi( config[ 9 + offset ] );
-				dodge[ index ] = atoi( config[ 10 + offset ] );
-				spawndmg[ index ] = atoi( config[ 11 + offset ] );
-				ubercharge[ index ] = atoi( config[ 12 + offset ] );
-				fastheal[ index ] = atoi( config[ 13 + offset ] );
-				demoman[ index ] = atoi( config[ 14 + offset ] );
-				practiceshot[ index ] = atoi( config[ 15 + offset ] );
-				bioelectric[ index ] = atoi( config[ 16 + offset ] );
-				redcross[ index ] = atoi( config[ 17 + offset ] );
-				bData[ index ] = atoi( config[ 18 + offset ] );
-				hud_red1[ index ] = atoi( config[ 19 + offset ] );
-				hud_green1[ index ] = atoi( config[ 20 + offset ] );
-				hud_blue1[ index ] = atoi( config[ 21 + offset ] );
-				hud_red2[ index ] = atoi( config[ 22 + offset ] );
-				hud_green2[ index ] = atoi( config[ 23 + offset ] );
-				hud_blue2[ index ] = atoi( config[ 24 + offset ] );
-				hud_alpha[ index ] = atoi( config[ 25 + offset ] );
-				hud_pos_x[ index ] = atof( config[ 26 + offset ] );
-				hud_pos_y[ index ] = atof( config[ 27 + offset ] );
-				hud_effect[ index ] = atoi( config[ 28 + offset ] );
-				hud_ef_fadein[ index ] = atof( config[ 29 + offset ] );
-				hud_ef_scantime[ index ] = atof( config[ 30 + offset ] );
-				expamp[ index ] = atoi( config[ 31 + offset ] );
-				expamptime[ index ] = atoi( config[ 32 + offset ] );
-				firstplay[ index ].SetUnixTimestamp( atoi( config[ 33 + offset ] ) );
-				nextdaily[ index ].SetUnixTimestamp( atoi( config[ 34 + offset ] ) );
-				dailyget[ index ] = atoi( config[ 35 + offset ] );
-				bHandicaps[ index ] = atoi( config[ 36 + offset ] );
-				
-				playerlevel[ index ] = scxpm_calc_lvl( xp[ index ] );
-				scxpm_calcneedxp( index );
-				scxpm_calc_points( index ); // skillpoints
-				
-				scxpm_amptask(); // Force check
-				if ( ACHIEVEMENTS_ENABLED ) GetAchievementData( index );
-				
-				int iCheck = CheckDaily( index, DateTime( UnixTimestamp() ), nextdaily[ index ] );
-				if ( iCheck == 1 )
-					g_Scheduler.SetTimeout( "scxpm_dailyrewards", 30.0, index, ( dailyget[ index ] + 1 ) );
-				else if ( iCheck == -1 )
-				{
-					string dummy;
-					DailyReward( index, 0, false, dummy, dummy );
-				}
-				
-				// Check if handicaps are allowed on this map
-				if ( !gNoSkills && !gNoHandicaps || gAllowHandicaps )
-				{
-					// Enabled. Autoselection turned on?
-					if ( ( bData[ index ] & HC_AUTOSELECT ) != 0 )
+					// On, reactivate the handicaps
+					CustomKeyvalues@ pHandicaps = pPlayer.GetCustomKeyvalues();
+					
+					if ( ( bHandicaps[ index ] & 1 ) != 0 ) 
 					{
-						// On, reactivate the handicaps
-						CustomKeyvalues@ pHandicaps = pPlayer.GetCustomKeyvalues();
-						
-						if ( ( bHandicaps[ index ] & 1 ) != 0 ) 
-						{
-							handicap1[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap01", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 2 ) != 0 ) 
-						{
-							handicap2[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap02", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 4 ) != 0 ) 
-						{
-							handicap3[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap03", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 8 ) != 0 ) 
-						{
-							handicap4[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap04", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 16 ) != 0 ) 
-						{
-							handicap5[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap05", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 32 ) != 0 ) 
-						{
-							handicap6[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap06", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 64 ) != 0 ) 
-						{
-							handicap7[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap07", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 128 ) != 0 ) 
-						{
-							handicap8[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap08", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 256 ) != 0 ) 
-						{
-							handicap9[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap09", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 512 ) != 0 ) 
-						{
-							handicap10[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap10", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 1024 ) != 0 ) 
-						{
-							handicap11[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap11", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 2048 ) != 0 ) 
-						{
-							handicap12[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap12", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 4096 ) != 0 ) 
-						{
-							handicap13[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap13", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 8192 ) != 0 ) 
-						{
-							handicap14[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap14", 1 );
-						}
-						if ( ( bHandicaps[ index ] & 16384 ) != 0 ) 
-						{
-							handicap15[ index ] = true;
-							pHandicaps.SetKeyvalue( "$i_handicap15", 1 );
-						}
+						handicap1[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap01", 1 );
 					}
-					else
+					if ( ( bHandicaps[ index ] & 2 ) != 0 ) 
 					{
-						// Disabled, reset the handicap data
-						bHandicaps[ index ] = 0;
+						handicap2[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap02", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 4 ) != 0 ) 
+					{
+						handicap3[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap03", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 8 ) != 0 ) 
+					{
+						handicap4[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap04", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 16 ) != 0 ) 
+					{
+						handicap5[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap05", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 32 ) != 0 ) 
+					{
+						handicap6[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap06", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 64 ) != 0 ) 
+					{
+						handicap7[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap07", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 128 ) != 0 ) 
+					{
+						handicap8[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap08", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 256 ) != 0 ) 
+					{
+						handicap9[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap09", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 512 ) != 0 ) 
+					{
+						handicap10[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap10", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 1024 ) != 0 ) 
+					{
+						handicap11[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap11", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 2048 ) != 0 ) 
+					{
+						handicap12[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap12", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 4096 ) != 0 ) 
+					{
+						handicap13[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap13", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 8192 ) != 0 ) 
+					{
+						handicap14[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap14", 1 );
+					}
+					if ( ( bHandicaps[ index ] & 16384 ) != 0 ) 
+					{
+						handicap15[ index ] = true;
+						pHandicaps.SetKeyvalue( "$i_handicap15", 1 );
 					}
 				}
-				
-				bMainDataExists[ index ] = true;
-				loaddata[ index ] = true;
-				break;
+				else
+				{
+					// Disabled, reset the handicap data
+					bHandicaps[ index ] = 0;
+				}
 			}
 		}
 		
-		// Load permanent increases last
-		GetPermaIncrease( index );
+		hud_red1[ index ] = atoi( config[ 19 ] );
+		hud_green1[ index ] = atoi( config[ 20 ] );
+		hud_blue1[ index ] = atoi( config[ 21 ] );
+		hud_red2[ index ] = atoi( config[ 22 ] );
+		hud_green2[ index ] = atoi( config[ 23 ] );
+		hud_blue2[ index ] = atoi( config[ 24 ] );
+		hud_alpha[ index ] = atoi( config[ 25 ] );
+		hud_pos_x[ index ] = atof( config[ 26 ] );
+		hud_pos_y[ index ] = atof( config[ 27 ] );
+		hud_effect[ index ] = atoi( config[ 28 ] );
+		hud_ef_fadein[ index ] = atof( config[ 29 ] );
+		hud_ef_scantime[ index ] = atof( config[ 30 ] );
+		firstplay[ index ].SetUnixTimestamp( atoi( config[ 33 ] ) );
 		
-		if ( !bMainDataExists[ index ] )
-		{
-			// No data found, assume new player
-			LoadEmptySkills( index );
-			loaddata[ index ] = true;
-		}
+		if ( ACHIEVEMENTS_ENABLED ) GetAchievementData( index );
+		loaddata[ index ] = true;
+	}
+	
+	// Load permanent increases last
+	GetPermaIncrease( index );
+	
+	if ( !loaddata[ index ] )
+	{
+		// No data found, assume new player
+		LoadEmptySkills( index );
+		loaddata[ index ] = true;
+	}
+	
+	// Simulate the levels of the player
+	if ( gSimulatedLevel )
+	{
+		xp[ index ] = scxpm_calc_xp( iAAllowed );
+		medals[ index ] = 0;
+		health[ index ] = 0;
+		armor[ index ] = 0;
+		rhealth[ index ] = 0;
+		rarmor[ index ] = 0;
+		rammo[ index ] = 0;
+		gravity[ index ] = 0;
+		speed[ index ] = 0;
+		dist[ index ] = 0;
+		dodge[ index ] = 0;
+		spawndmg[ index ] = 0;
+		ubercharge[ index ] = 0;
+		fastheal[ index ] = 0;
+		demoman[ index ] = 0;
+		practiceshot[ index ] = 0;
+		bioelectric[ index ] = 0;
+		redcross[ index ] = 0;
+		expamp[ index ] = 0;
+		expamptime[ index ] = 0;
+		bHandicaps[ index ] = 0;
+		bData[ index ] &= ~SS_DISPENCER;
+		bData[ index ] &= ~SS_RANGEHEAL;
+		
+		playerlevel[ index ] = scxpm_calc_lvl( xp[ index ] );
+		scxpm_calcneedxp( index );
+		scxpm_calc_points( index ); // skillpoints
 	}
 }
 
@@ -6964,6 +7155,7 @@ void LoadEmptySkills( const int& in index )
 	handicap12[ index ] = false;
 	handicap13[ index ] = false;
 	handicap14[ index ] = false;
+	handicap15[ index ] = false;
 	bHandicaps[ index ] = 0;
 }
 
@@ -7046,60 +7238,51 @@ void GetAchievementData( const int& in index, MenuHandler@ state = null )
 	string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
 	
 	// Achievement data
-	for ( uint uiVaultIndex = 0; uiVaultIndex < g_AchievementVaultData.length(); uiVaultIndex++ )
+	if ( g_AchievementVaultData.exists( szSteamID ) )
 	{
-		array< string >@ key = g_AchievementVaultData[ uiVaultIndex ].Split( '\t' );
+		// This data also exists
+		string data = string( g_AchievementVaultData[ szSteamID ] );
+		data.Trim();
 		
-		// This is our SteamID?
-		string szCheck = key[ 0 ];
-		szCheck.Trim();
-		if ( szSteamID == szCheck )
+		uint uiAchievementID = 0;
+		for ( uint uiDataChar = 0; uiDataChar < data.Length(); uiDataChar++ )
 		{
-			// It is, retrieve data
-			string data = key[ 1 ];
-			data.Trim();
+			// First character is unlock status
+			aData[ index ][ uiAchievementID ] = IntStringToBool( data[ uiDataChar ] );
 			
-			uint uiAchievementID = 0;
-			for ( uint uiDataChar = 0; uiDataChar < data.Length(); uiDataChar++ )
+			uiDataChar++; // Goto next character
+			
+			// Second character is either claim status or progress variable
+			if ( !aData[ index ][ uiAchievementID ] )
 			{
-				// First character is unlock status
-				aData[ index ][ uiAchievementID ] = IntStringToBool( data[ uiDataChar ] );
-				
-				uiDataChar++; // Goto next character
-				
-				// Second character is either claim status or progress variable
-				if ( !aData[ index ][ uiAchievementID ] )
-				{
-					// Progress variable
-					CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
-					pCustom.SetKeyvalue( "$i_sys_a_" + uiAchievementID, atoi( data[ uiDataChar ] ) );
-				}
+				// Progress variable
+				CustomKeyvalues@ pCustom = pPlayer.GetCustomKeyvalues();
+				pCustom.SetKeyvalue( "$i_sys_a_" + uiAchievementID, atoi( data[ uiDataChar ] ) );
+			}
+			else
+				aClaim[ index ][ uiAchievementID ] = IntStringToBool( data[ uiDataChar ] );
+			
+			// If menu is opened, add item
+			if ( state !is null )
+			{
+				if ( aData[ index ][ uiAchievementID ] )
+					state.menu.AddItem( "\\y[U]\\w " + szAchievementNames[ uiAchievementID ] + "\n", any( string( uiAchievementID ) ) );
 				else
-					aClaim[ index ][ uiAchievementID ] = IntStringToBool( data[ uiDataChar ] );
-				
-				// If menu is opened, add item
-				if ( state !is null )
-				{
-					if ( aData[ index ][ uiAchievementID ] )
-						state.menu.AddItem( "\\y[U]\\w " + szAchievementNames[ uiAchievementID ] + "\n", any( string( uiAchievementID ) ) );
-					else
-						state.menu.AddItem( "\\d[-]\\w " + szAchievementNames[ uiAchievementID ] + "\n", any( string( uiAchievementID ) ) );
-				}
-				
-				uiAchievementID++;
+					state.menu.AddItem( "\\d[-]\\w " + szAchievementNames[ uiAchievementID ] + "\n", any( string( uiAchievementID ) ) );
 			}
 			
-			bAchievementDataExists[ index ] = true;
-			break;
+			uiAchievementID++;
 		}
 	}
-	
-	// No data exists, initialize menu
-	if ( !bAchievementDataExists[ index ] && state !is null )
+	else
 	{
-		for ( uint uiIndex = 0; uiIndex < szAchievementNames.length(); uiIndex++ )
+		if ( state !is null )
 		{
-			state.menu.AddItem( "\\d[-]\\w " + szAchievementNames[ uiIndex ] + "\n", any( string( uiIndex ) ) );
+			// No data exists, initialize menu
+			for ( uint uiIndex = 0; uiIndex < szAchievementNames.length(); uiIndex++ )
+			{
+				state.menu.AddItem( "\\d[-]\\w " + szAchievementNames[ uiIndex ] + "\n", any( string( uiIndex ) ) );
+			}
 		}
 	}
 }
@@ -7539,6 +7722,31 @@ string GetFormatDate( DateTime& in dtTime )
 	return szMonth + " " + day + szAppend + ", " + year;
 }
 
+/* Stupid but meh. Get the name of a handicap */
+string GetHandicapName( int iHC )
+{
+	string szReturn = "NULL";
+	switch ( iHC )
+	{
+		case 1: szReturn = "Medical Phobia"; break;
+		case 2: szReturn = "Obsolete Technology"; break;
+		case 3: szReturn = "Nitrogen Blood"; break;
+		case 4: szReturn = "Karmic Retribution"; break;
+		case 5: szReturn = "Realism"; break;
+		case 6: szReturn = "Big Explosion"; break;
+		case 7: szReturn = "Limited Equipment"; break;
+		case 8: szReturn = "Dead Weight"; break;
+		case 9: szReturn = "Lacking Help"; break;
+		case 10: szReturn = "Dirty Mag"; break;
+		case 11: szReturn = "Lost Bullets"; break;
+		case 12: szReturn = "Weak Restart"; break;
+		case 13: szReturn = "Dangerous Waters"; break;
+		case 14: szReturn = "Bleeding View"; break;
+		case 15: szReturn = "Health Crisis"; break;
+	}
+	return szReturn;
+}
+
 // Converts a boolean to an integer, returned as a string
 string BoolToIntString( bool& in bConvert )
 {
@@ -7751,6 +7959,12 @@ string GetAchievementMission( const int& in iAchievementID )
 			szReturn = "Clear map snd on Standard difficulty or higher"; break;
 		case 54: // Last Normalcy
 			szReturn = "Clear map intruder:\n\n> No deaths\n> Without using Gauss or Egon\n> With handicap [Health Crisis]"; break;
+		case 55: // Is that it?
+			szReturn = "Clear map auspices under 3 deaths"; break;
+		case 56: // Made in Quake
+			szReturn = "Clear map it_has_leaks:\n\n> No deaths\n> With handicap [Limited Equipment]"; break;
+		case 57: // Tedious luck
+			szReturn = "Get the good ending on leprechaun3-2"; break;
 		default:
 			szReturn = "ERR_UNKNOWN_ACHIEVEMENT"; break;
 	}
@@ -7970,6 +8184,34 @@ void GiveAchievementReward( const int& in index, const int& in iAchievementID )
 				
 				break;
 			}
+			case 56: // Made in Quake
+			{
+				if ( expamp[ index ] > 0 )
+				{
+					g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] Can't redeem reward: You already have a multiplier.\n" );
+					return;
+				}
+				else
+				{
+					g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] Congratulations! Your reward for clearing the achievement is \"x2 XP gain\" [" + ( engage_mode ? "2 hours" : "1 hour" ) + "]!\n" );
+					
+					int duration = ( engage_mode ? 120 : 60 );
+					
+					expamp[ index ] = 1;
+					expamptime[ index ] = duration + 1;
+				}
+				
+				break;
+			}
+			case 57: // Tedious luck
+			{
+				g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] Congratulations! Your reward for clearing the achievement is " + ( engage_mode ? "\"32,000 XP\"" : "\"16,000 XP\"" ) + "!\n" );
+				
+				xp[ index ] += ( engage_mode ? 32000 : 16000 );
+				earnedxp[ index ] += ( engage_mode ? 32000 : 16000 );
+				
+				break;
+			}
 		}
 		
 		aClaim[ index ][ iAchievementID ] = true;
@@ -8170,81 +8412,6 @@ class CDelayedXP : ScriptBaseEntity // Delayed XP giver (scxpm_give_xp)
 	}
 }
 
-class CFFToggler : ScriptBaseEntity // Toggle the FF status (gEnableFF)
-{
-	string szTriggerAfterToggle;
-	string szTriggerAfterON;
-	string szTriggerAfterOFF;
-	
-	bool KeyValue( const string& in szKey, const string& in szValue )
-	{
-		if ( szKey == "trigger_after_use" )
-		{
-			szTriggerAfterToggle = szValue;
-			return true;
-		}
-		else if ( szKey == "trigger_after_on" )
-		{
-			szTriggerAfterON = szValue;
-			return true;
-		}
-		else if ( szKey == "trigger_after_off" )
-		{
-			szTriggerAfterOFF = szValue;
-			return true;
-		}
-		else
-			return BaseClass.KeyValue( szKey, szValue );
-	}
-	
-	void Spawn()
-	{
-		// Self delete if we do not have a targetname
-		if ( string( self.pev.targetname ).Length() < 1 )
-			self.pev.flags |= FL_KILLME; // Kill on next frame instead of instantly.
-	}
-	
-	void Use( CBaseEntity@ pActivator, CBaseEntity@ pCaller, USE_TYPE useType, float flValue )
-	{
-		// Does USE_TYPE support switch?
-		if ( useType == USE_TOGGLE )
-		{
-			if ( gEnableFF )
-				gEnableFF = false;
-			else
-				gEnableFF = true;
-		}
-		else if ( useType == USE_ON )
-		{
-			gEnableFF = true;
-			
-			if ( szTriggerAfterON.Length() > 0 )
-				g_EntityFuncs.FireTargets( szTriggerAfterON, pActivator, pCaller, USE_TOGGLE, 0.0f, 0.0f );
-		}
-		else if ( useType == USE_OFF )
-		{
-			gEnableFF = false;
-			
-			if ( szTriggerAfterOFF.Length() > 0 )
-				g_EntityFuncs.FireTargets( szTriggerAfterOFF, pActivator, pCaller, USE_TOGGLE, 0.0f, 0.0f );
-		}
-		
-		if ( szTriggerAfterToggle.Length() > 0 )
-			g_EntityFuncs.FireTargets( szTriggerAfterToggle, pActivator, pCaller, USE_TOGGLE, 0.0f, 0.0f );
-		
-		// Warn players?
-		if ( self.pev.SpawnFlagBitSet( 2 ) )
-		{
-			if ( gEnableFF )
-				g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "[SCXPM] Friendly Fire has been enabled. Beware!\n" );
-		}
-		
-		// Once only?
-		if ( self.pev.SpawnFlagBitSet( 1 ) )
-			self.pev.flags |= FL_KILLME;
-	}
-}
-
 class CSkillToggler : ScriptBaseEntity // Edit allowance of skills
 {
 	string szTriggerAfter;
@@ -8394,6 +8561,181 @@ class CHideHUD : ScriptBaseEntity // Show/Hide the HUD
 	}
 }
 
+class CSparkHandler : ScriptBaseEntity // Spark of Lifes
+{
+	array< string > szPlayers;
+	array< int > iLives;
+	
+	void Spawn()
+	{
+		// Limited respawning must be active, otherwise bai.
+		if ( !gLimitedRespawn )
+			self.pev.flags |= FL_KILLME; // Kill on next frame instead of instantly.
+	}
+	
+	void Use( CBaseEntity@ pActivator, CBaseEntity@ pCaller, USE_TYPE useType, float flValue )
+	{
+		if ( pActivator.IsPlayer() )
+		{
+			CBasePlayer@ pPlayer = cast< CBasePlayer@ >( pActivator );
+			string szSteamID = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
+			
+			int iArrayPos = szPlayers.find( szSteamID );
+			if ( iArrayPos >= 0 )
+			{
+				iLives[ iArrayPos ]--;
+				if ( iLives[ iArrayPos ] < 0 )
+				{
+					// Manual force-kill
+					pPlayer.pev.nextthink = g_Engine.time + 0.1;
+					pPlayer.pev.deadflag = DEAD_DYING;
+					pPlayer.pev.movetype = MOVETYPE_TOSS;
+					pPlayer.pev.solid = SOLID_NOT;
+					pPlayer.GibMonster();
+					pPlayer.pev.effects |= EF_NODRAW;
+					
+					// Custom death message
+					g_PlayerFuncs.ClientPrintAll( HUD_PRINTNOTIFY, string( pPlayer.pev.netname ) + " ran out of respawns.\n" );
+					
+					// Disallow respawn
+					pPlayer.m_flRespawnDelayTime = Math.FLOAT_MAX;
+					
+					if ( gNoSpectate || g_EngineFuncs.CVarGetFloat( "mp_observer_cyclic" ) == 1.0 )
+						g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] You ran out of respawns.\n" );
+					else
+						g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] You ran out of respawns. Say '/spectate' to move to observer.\n" );
+					
+					// Scan the array and check if no more players can respawn
+					int iSurvival = 0;
+					for ( uint uiIndex = 0; uiIndex < szPlayers.length(); uiIndex++ )
+					{
+						if ( iLives[ uiIndex ] > 0 )
+						{
+							iSurvival++;
+							break; // At least one player can still respawn, stop.
+						}
+					}
+					
+					if ( iSurvival == 0 )
+					{
+						// Fire the entity if it exists
+						CBaseEntity@ pGameOverEnt = g_EntityFuncs.FindEntityByTargetname( null, "game_sparksout" );
+						if ( pGameOverEnt !is null )
+						{
+							g_EntityFuncs.FireTargets( "game_sparksout", null, null, USE_TOGGLE, 0.0f, 0.0f );
+							
+							// Ensure this entity is fired only once
+							pGameOverEnt.pev.flags |= FL_KILLME; // On next frame! Give time to the entity to fire it's targets!
+						}
+						
+						g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "[SCXPM] No living players left.\n" );
+					}
+				}
+				else
+				{
+					// Just joined?
+					if ( pCaller is null )
+						g_Scheduler.SetTimeout( "scxpm_latesparks", 12.3, pPlayer.entindex(), iLives[ iArrayPos ] );
+					else
+						g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] " + iLives[ iArrayPos ] + " respawn(s) remaining...\n" );
+				}
+			}
+			else
+			{
+				szPlayers.insertLast( szSteamID );
+				iLives.insertLast( iAAllowed );
+				
+				// Just joined?
+				if ( pCaller is null )
+					g_Scheduler.SetTimeout( "scxpm_latesparks", 12.3, pPlayer.entindex(), iAAllowed );
+				else
+					g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] " + iAAllowed + " respawn(s) remaining...\n" );
+			}
+		}
+	}
+}
+void scxpm_latesparks( const int& in index, const int& in spawns )
+{
+	CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( index );
+	if ( pPlayer !is null && pPlayer.IsConnected() )
+	{
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] " + spawns + " respawn(s) remaining...\n" );
+	}
+}
+
+class CSimulateLevel : ScriptBaseEntity // Enable simulated level
+{
+	void Spawn()
+	{
+		// Simulated level cannot be turned on on these conditions
+		if ( gSingleAchievement || gLimitedRespawn )
+		{
+			self.pev.flags |= FL_KILLME;
+			return;
+		}
+		
+		gSimulatedLevel = true;
+		for ( int i = 1; i <= g_Engine.maxClients; i++ )
+		{
+			CBasePlayer@ pPlayer = g_PlayerFuncs.FindPlayerByIndex( i );
+			
+			if ( pPlayer !is null && pPlayer.IsConnected() )
+			{
+				pPlayer.pev.frags = 0;
+				lastfrags[ i ] = 0;
+				earnedxp[ i ] = 0;
+				
+				xp[ i ] = scxpm_calc_xp( iAAllowed );
+				medals[ i ] = 0;
+				health[ i ] = 0;
+				armor[ i ] = 0;
+				rhealth[ i ] = 0;
+				rarmor[ i ] = 0;
+				rammo[ i ] = 0;
+				gravity[ i ] = 0;
+				speed[ i ] = 0;
+				dist[ i ] = 0;
+				dodge[ i ] = 0;
+				spawndmg[ i ] = 0;
+				ubercharge[ i ] = 0;
+				fastheal[ i ] = 0;
+				demoman[ i ] = 0;
+				practiceshot[ i ] = 0;
+				bioelectric[ i ] = 0;
+				redcross[ i ] = 0;
+				expamp[ i ] = 0;
+				expamptime[ i ] = 0;
+				bHandicaps[ i ] = 0;
+				bData[ i ] &= ~SS_DISPENCER;
+				bData[ i ] &= ~SS_RANGEHEAL;
+				
+				playerlevel[ i ] = scxpm_calc_lvl( xp[ i ] );
+				scxpm_calcneedxp( i );
+				scxpm_calc_points( i ); // skillpoints
+				
+				// Warn players?
+				if ( self.pev.SpawnFlagBitSet( 1 ) )
+					g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTTALK, "[SCXPM] Your current level is being simulated. Your real level will be restored at map end.\n" );
+			}
+		}
+		
+		self.pev.flags |= FL_KILLME;
+	}
+	
+	bool KeyValue( const string& in szKey, const string& in szValue )
+	{
+		if ( szKey == "level" )
+		{
+			if ( !gSingleAchievement && !gLimitedRespawn )
+				iAAllowed = atoi( szValue );
+			
+			return true;
+		}
+		else
+			return BaseClass.KeyValue( szKey, szValue );
+	}
+}
+
 // Global on purpose
 void GiveDelayedXP( const int& in index )
 {
@@ -8441,17 +8783,20 @@ void InitVaults()
 	
 	if ( fData !is null && fData.IsOpen() )
 	{
-		int iArraySize = 0;
 		string szLine;
-		
 		while ( !fData.EOFReached() )
 		{
 			fData.ReadLine( szLine );
 			if ( szLine.Length() > 0 )
 			{
-				iArraySize++;
-				g_MainVaultData.resize( iArraySize );
-				g_MainVaultData[ iArraySize - 1 ] = szLine;
+				array< string >@ data = szLine.Split( '\t' );
+				if ( data.length() == 2 )
+				{
+					string steamid = data[ 0 ];
+					string stuff = data[ 1 ];
+					
+					g_MainVaultData[ steamid ] = stuff;
+				}
 			}
 		}
 		
@@ -8466,35 +8811,27 @@ void InitVaults()
 		
 		if ( fData !is null && fData.IsOpen() )
 		{
-			int iArraySize = 0;
 			string szLine;
-			
 			while ( !fData.EOFReached() )
 			{
 				fData.ReadLine( szLine );
 				if ( szLine.Length() > 0 )
 				{
-					iArraySize++;
-					g_AchievementVaultData.resize( iArraySize );
-					
-					array< string >@ key = szLine.Split( '\t' );
-					
-					string steamID = key[ 0 ];
-					string data = key[ 1 ];
-					
-					steamID.Trim();
-					data.Trim();
-					
-					if ( data.FindFirstOf( "#" ) != String::INVALID_INDEX )
+					array< string >@ data = szLine.Split( '\t' );
+					if ( data.length() == 2 )
 					{
-						// Convert old v3.20/v3.21 to new save format
-						data.Replace( "_", "" );
-						data.Replace( "#", "" );
+						string steamid = data[ 0 ];
+						string stuff = data[ 1 ];
 						
-						g_AchievementVaultData[ iArraySize - 1 ] = steamID + "\t" + data;
+						if ( stuff.FindFirstOf( "#" ) != String::INVALID_INDEX )
+						{
+							// Convert old v3.20/v3.21 to new save format
+							stuff.Replace( "_", "" );
+							stuff.Replace( "#", "" );
+						}
+						
+						g_AchievementVaultData[ steamid ] = stuff;
 					}
-					else
-						g_AchievementVaultData[ iArraySize - 1 ] = szLine;
 				}
 			}
 			
@@ -8518,9 +8855,10 @@ void DumpVaults()
 	File@ fData = g_FileSystem.OpenFile( szDataPath, OpenFile::WRITE );
 	if ( fData !is null && fData.IsOpen() )
 	{
-		for ( uint uiVaultIndex = 0; uiVaultIndex < g_MainVaultData.length(); uiVaultIndex++ )
+		array< string >@ vaultData = g_MainVaultData.getKeys();
+		for ( uint uiVaultIndex = 0; uiVaultIndex < vaultData.length(); uiVaultIndex++ )
 		{
-			fData.Write( "\n" + g_MainVaultData[ uiVaultIndex ] );
+			fData.Write( "\n" + vaultData[ uiVaultIndex ] + "\t" + string( g_MainVaultData[ vaultData[ uiVaultIndex ] ] ) );
 		}
 		
 		fData.Close();
@@ -8536,9 +8874,10 @@ void DumpVaults()
 		@fData = g_FileSystem.OpenFile( szDataPath, OpenFile::WRITE );
 		if ( fData !is null && fData.IsOpen() )
 		{
-			for ( uint uiVaultIndex = 0; uiVaultIndex < g_AchievementVaultData.length(); uiVaultIndex++ )
+			array< string >@ vaultData = g_AchievementVaultData.getKeys();
+			for ( uint uiVaultIndex = 0; uiVaultIndex < vaultData.length(); uiVaultIndex++ )
 			{
-				fData.Write( "\n" + g_AchievementVaultData[ uiVaultIndex ] );
+				fData.Write( "\n" + vaultData[ uiVaultIndex ] + "\t" + string( g_AchievementVaultData[ vaultData[ uiVaultIndex ] ] ) );
 			}
 			
 			fData.Close();
