@@ -3124,7 +3124,7 @@ void snd_check()
 					{
 						// Get!
 						CustomKeyvalues@ pUnlock = pPlayer.GetCustomKeyvalues();
-						pUnlock.SetKeyvalue( "$i_a_unlock", 53 );
+						pUnlock.SetKeyvalue( "$i_a_unlock", 54 );
 					}
 				}
 			}
@@ -3172,7 +3172,7 @@ void intruder_check()
 							{
 								// Get!
 								CustomKeyvalues@ pUnlock = pPlayer.GetCustomKeyvalues();
-								pUnlock.SetKeyvalue( "$i_a_unlock", 54 );
+								pUnlock.SetKeyvalue( "$i_a_unlock", 55 );
 							}
 						}
 					}
