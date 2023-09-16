@@ -1941,7 +1941,7 @@ void scxpm_toggleoverpower( const CCommand@ pArgs )
 		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Access denied.\n" );
 }
 
-CClientCommand ADMIN_TOGGLESAVE( "xp_toggle_save", "- SOLO DIRECTIVOS - Apaga/Enciende el guardado de niveles/logros en este mapa", @scxpm_togglesave, ConCommandFlag::AdminOnly );
+CClientCommand ADMIN_TOGGLESAVE( "xp_toggle_save", "- OWNERS ONLY - Enables/Disables player save on this map.", @scxpm_togglesave, ConCommandFlag::AdminOnly );
 void scxpm_togglesave( const CCommand@ pArgs )
 {
 	CBasePlayer@ pPlayer = g_ConCommandSystem.GetCurrentPlayer();
@@ -1960,22 +1960,25 @@ void scxpm_togglesave( const CCommand@ pArgs )
 		string asteamid = g_EngineFuncs.GetPlayerAuthId( pPlayer.edict() );
 		
 		// Log messages
-		g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") activo/desactivo el guardado de niveles/logros\n" );
-		SCXPM_Log( aname + " (" + asteamid + ") activo/desactivo el guardado de niveles/logros\n" );
-		
 		if ( gNoSave )
 		{
-			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Apagar el guardado de niveles/logros\n" );
-			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Los datos ya no se guardan\n" );
+			g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") disabled data saving.\n" );
+			SCXPM_Log( aname + " (" + asteamid + ") disabled data saving.\n" );
+			
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Turn off data saving.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Player data is no longer saved.\n" );
 		}
 		else
 		{
-			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Encender el guardado de niveles/logros\n" );
-			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Los datos ahora se guardaran\n" );
+			g_Game.AlertMessage( at_logged, "[SCXPM] " + aname + " (" + asteamid + ") enabled data saving.\n" );
+			SCXPM_Log( aname + " (" + asteamid + ") enabled data saving.\n" );
+			
+			g_PlayerFuncs.ClientPrintAll( HUD_PRINTTALK, "ADMIN " + aname + ": Turn on data saving.\n" );
+			g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Player data will now be saved.\n" );
 		}
 	}
 	else
-		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] ERROR: Acceso denegado\n" );
+		g_PlayerFuncs.ClientPrint( pPlayer, HUD_PRINTCONSOLE, "[SCXPM] Access denied.\n" );
 }
 
 CClientCommand ADMIN_STARTSIMULATION( "xp_start_simulation", "<Level> - OWNERS ONLY - Enables simulation mode for the remainder of the map.", @scxpm_startsimulation, ConCommandFlag::AdminOnly );
