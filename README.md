@@ -1,3 +1,10 @@
+## DEPRECATION WARNING
+
+This old "v3" version of SCXPM will be made obsolete on December, 31st. Please use the updated "v4" version of SCXPM.
+Old v3.73 save files are compatible with v4 updates. Migration should be possible with ease, but as a good practice, backup your data before updating.
+
+##
+
 An AngelScript port of my custom SCXPM plugin.
 ## Why?
 When Sven Co-op 5.00 came out, there was a lot of issues with Metamod/AMXX, to the point that my SCXPM frequently crashed the server. Because of this, I started to port the plugin to the new "AngelScript" language since day one. It was a bumpy road at first, since I had to rewrite thousands of lines of code with absolutely ZERO knowledge with the new language. This resulted in early bits of code that to this day still remains: An absolute mess that can be definitively rewritten in a better way.
