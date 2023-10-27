@@ -16,8 +16,8 @@
 	along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const string version = "v4.00";
-const string lastupdate = "September 16th, 2023";
+const string version = "v4.02";
+const string lastupdate = "October 27th, 2023";
 
 const int SAVE_MIN_LEVEL = 1; // Min level required for data to be saved
 const int SAVE_MIN_ACHIEVEMENTS = 1; // Min achievements cleared for achievements to be saved
@@ -2262,7 +2262,7 @@ void scxpm_handicaps( const int& in index, const int& in iPage = 0 )
 	if ( handicap14[ index ] ) percent += 18;
 	if ( handicap15[ index ] ) percent += 13;
 	
-	string title = "Handicaps\n\n\n+" + percent + "% XP Gain";
+	string title = "Handicaps\n\n\n+" + percent + "% XP Gain  ";
 	
 	state.menu.SetTitle( title );
 	
@@ -2271,63 +2271,63 @@ void scxpm_handicaps( const int& in index, const int& in iPage = 0 )
 	else autosave += "[ NO ]\n\n";
 	
 	string hc1text = "Medical Phobia ";
-	if ( handicap1[ index ] ) hc1text += "[ YES ]\n\n";
+	if ( handicap1[ index ] ) hc1text += "[ YES ]\n";
 	else hc1text += "[ NO ]\n";
 	
 	string hc2text = "Obsolete Technology ";
-	if ( handicap2[ index ] ) hc2text += "[ YES ]\n\n";
+	if ( handicap2[ index ] ) hc2text += "[ YES ]\n";
 	else hc2text += "[ NO ]\n";
 	
 	string hc3text = "Nitrogen Blood ";
-	if ( handicap3[ index ] ) hc3text += "[ YES ]\n\n";
+	if ( handicap3[ index ] ) hc3text += "[ YES ]\n";
 	else hc3text += "[ NO ]\n";
 	
 	string hc4text = "Karmic Retribution ";
-	if ( handicap4[ index ] ) hc4text += "[ YES ]\n\n";
+	if ( handicap4[ index ] ) hc4text += "[ YES ]\n";
 	else hc4text += "[ NO ]\n";
 	
 	string hc5text = "Realism ";
-	if ( handicap5[ index ] ) hc5text += "[ YES ]\n\n";
+	if ( handicap5[ index ] ) hc5text += "[ YES ]\n";
 	else hc5text += "[ NO ]\n";
 	
 	string hc6text = "Big Explosion ";
-	if ( handicap6[ index ] ) hc6text += "[ YES ]\n\n";
+	if ( handicap6[ index ] ) hc6text += "[ YES ]\n";
 	else hc6text += "[ NO ]\n";
 	
 	string hc7text = "Limited Equipment ";
-	if ( handicap7[ index ] ) hc7text += "[ YES ]\n\n";
+	if ( handicap7[ index ] ) hc7text += "[ YES ]\n";
 	else hc7text += "[ NO ]\n";
 	
 	string hc8text = "Dead Weight ";
-	if ( handicap8[ index ] ) hc8text += "[ YES ]\n\n";
+	if ( handicap8[ index ] ) hc8text += "[ YES ]\n";
 	else hc8text += "[ NO ]\n";
 	
 	string hc9text = "Lacking Help ";
-	if ( handicap9[ index ] ) hc9text += "[ YES ]\n\n";
+	if ( handicap9[ index ] ) hc9text += "[ YES ]\n";
 	else hc9text += "[ NO ]\n";
 	
 	string hc10text = "Dirty Mag ";
-	if ( handicap10[ index ] ) hc10text += "[ YES ]\n\n";
+	if ( handicap10[ index ] ) hc10text += "[ YES ]\n";
 	else hc10text += "[ NO ]\n";
 	
 	string hc11text = "Lost Bullets ";
-	if ( handicap11[ index ] ) hc11text += "[ YES ]\n\n";
+	if ( handicap11[ index ] ) hc11text += "[ YES ]\n";
 	else hc11text += "[ NO ]\n";
 	
 	string hc12text = "Weak Restart ";
-	if ( handicap12[ index ] ) hc12text += "[ YES ]\n\n";
+	if ( handicap12[ index ] ) hc12text += "[ YES ]\n";
 	else hc12text += "[ NO ]\n";
 	
 	string hc13text = "Dangerous Waters ";
-	if ( handicap13[ index ] ) hc13text += "[ YES ]\n\n";
+	if ( handicap13[ index ] ) hc13text += "[ YES ]\n";
 	else hc13text += "[ NO ]\n";
 	
 	string hc14text = "Bleeding View ";
-	if ( handicap14[ index ] ) hc14text += "[ YES ]\n\n";
+	if ( handicap14[ index ] ) hc14text += "[ YES ]\n";
 	else hc14text += "[ NO ]\n";
 	
 	string hc15text = "Health Crisis ";
-	if ( handicap15[ index ] ) hc15text += "[ YES ]\n\n";
+	if ( handicap15[ index ] ) hc15text += "[ YES ]\n";
 	else hc15text += "[ NO ]\n";
 	
 	state.menu.AddItem( autosave, any( "item0_0" ) );
@@ -4678,14 +4678,29 @@ void scxpm_updatehc()
 						{
 							if ( pCurrentWeapon.m_fInReload )
 							{
-								if ( pCurrentWeapon.m_iClip != -1 )
-									pCurrentWeapon.m_iClip = 0;
-								if ( pCurrentWeapon.m_iClip2 != -1 )
+								// Akimbo Uzi has a two-step reload
+								if ( pCurrentWeapon.m_iId == WEAPON_UZI && pPlayer.get_m_szAnimExtension() == 'uzis' )
 								{
-									if ( pCurrentWeapon.m_iId != WEAPON_M16 )
+									if ( pCurrentWeapon.pev.vuser1.x == 0 )
+									{
+										pCurrentWeapon.m_iClip = 0;
 										pCurrentWeapon.m_iClip2 = 0;
+										pCurrentWeapon.pev.vuser1.x = 1;
+									}
+								}
+								else
+								{
+									if ( pCurrentWeapon.m_iClip != -1 )
+										pCurrentWeapon.m_iClip = 0;
+									if ( pCurrentWeapon.m_iClip2 != -1 )
+									{
+										if ( pCurrentWeapon.m_iId != WEAPON_M16 )
+											pCurrentWeapon.m_iClip2 = 0;
+									}
 								}
 							}
+							else
+								pCurrentWeapon.pev.vuser1.x = 0; // ugly hack to fix uzi ammo
 						}
 					}
 				}
