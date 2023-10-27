@@ -1,3 +1,8 @@
+## v4.02
+
+- Fixed handicap menu inserting new lines when activating handicaps.
+- Fixed "Dirty Mag" handicap consuming akimbo uzi ammo -twice- during reload.
+
 ## v4.00
 
 - Reworked save system, this new system should be much more efficient with increase server perfomance. Old v3.73 save files are compatible with this update, migration should be done automatically with no issues.
