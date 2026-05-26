@@ -1729,10 +1729,10 @@ void AddExternal( const int iPlayerIndex )
 			medals[ iPlayerIndex ] = 180;
 		scxpm_calc_specialpoints( iPlayerIndex );
 		
-		if ( medals[ iPlayerIndex ] >= 180 && !HasPermaIncrease( iPlayerIndex, "ML_PI_INFINITE_REBOOT" ) )
-			AddPermaIncrease( iPlayerIndex, 0, "ML_PI_INFINITE_REBOOT", "ML_PI_INFINITE_REBOOT_DESC" );
-		else if ( medals[ iPlayerIndex ] >= 42 && !HasPermaIncrease( iPlayerIndex, "ML_PI_THE_ANSWER" ) )
-			AddPermaIncrease( iPlayerIndex, 36, "ML_PI_THE_ANSWER", "ML_PI_THE_ANSWER_DESC" );
+		if ( medals[ iPlayerIndex ] >= 180 && !HasPermaIncrease( iPlayerIndex, "Infinite Reboot" ) )
+			AddPermaIncrease( iPlayerIndex, 0, "Infinite Reboot", "Many would think that repeating every timeline\nover and over it's purposeless, and done only\nby maniacs.\n\nBut for this player, it's a day to day\nhabit of perseverance. A worthy achievement.\n\nAward for reaching 180 medals." );
+		else if ( medals[ iPlayerIndex ] >= 42 && !HasPermaIncrease( iPlayerIndex, "The Answer" ) )
+			AddPermaIncrease( iPlayerIndex, 36, "The Answer", "Everyone knows what this number is, but it is\nalso a distant memory from forgotten times.\n\nAward for reaching 42 medals." );
 		
 		pPlayer.KeyValue( "$i_ext_medals", "0" );
 	}
