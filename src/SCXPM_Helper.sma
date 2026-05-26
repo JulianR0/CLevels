@@ -1,6 +1,6 @@
 /*
-	Imperium Sven Co-op's SCXPM: Auxiliary Scripts
-	Copyright (C) 2019-2023  Julian Rodriguez
+	Giegue's SCXPM: Auxiliary Scripts
+	Copyright (C) 2019-2026  Julian Rodriguez
 	
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -21,12 +21,14 @@
 #include <amxmodx>
 #include <engine>
 #include <fakemeta>
-#include <hamsandwich>
 
-new g_MaxPlayers;
+// CBasePlayer --> m_iDeaths
+new const _linux_PLAYER_DEATHS 			= 708;		 // (TODO: This offset is old! Update it)
+new const _win32_PLAYER_DEATHS 			= 714;
 
-new medkitpoints_cvar;
-new medkitpoints;
+new OFFSET_PLAYER_DEATHS;
+
+new hudCVar;
 
 public plugin_precache()
 {
@@ -37,148 +39,73 @@ public plugin_init()
 {
 	register_plugin( "SCXPM Helper", "1.3", "Giegue" );
 	
-	g_MaxPlayers = get_maxplayers();
+	OFFSET_PLAYER_DEATHS = is_linux_server() ? _linux_PLAYER_DEATHS : _win32_PLAYER_DEATHS;
 	
-	// Wait for the map to finish loading before getting the value of this CVar
-	medkitpoints_cvar = get_cvar_pointer( "mp_disable_medkit_points" );
-	set_task( 1.0, "GetPoints" );
+	hudCVar = register_cvar( "scxpm_hud_channel", "3" );
+	set_task( 0.5, "GetHUDCVar" );
 	
-	// SCXPM HELPER
-	RegisterHam( Ham_TakeDamage, "monster_sentry", "rexp_disable" );
-	RegisterHam( Ham_TakeDamage, "monster_miniturret", "rexp_disable" );
-	RegisterHam( Ham_TakeDamage, "monster_turret", "rexp_disable" );
-	RegisterHam( Ham_TakeDamage, "monster_robogrunt", "rexp_disable" );
-}
-
-public GetPoints()
-{
-	medkitpoints = get_pcvar_num( medkitpoints_cvar );
+	// "stuck_kill" death exploit fix
+	register_clcmd( "stuck_kill", "addDeath" );
 }
 
 public check_entities( entid, kvd_handle )
 {
-	if (is_valid_ent(entid))
+	if ( is_valid_ent( entid ) )
 	{
-		static classname[32], keyname[32], value[32];
-		get_kvd(kvd_handle, KV_ClassName, classname, 31);
+		static classname[ 33 ], keyname[ 33 ], value[ 33 ];
+		get_kvd( kvd_handle, KV_ClassName, classname, charsmax( classname ) );
 		
 		// Delete all XP-abusive entities
-		if (equali(classname, "monster_cockroach"))
+		if ( equali( classname, "monster_cockroach" ) )
 		{
-			remove_entity(entid);
+			remove_entity( entid );
 			return FMRES_SUPERCEDE;
 		}
-		else if (equali(classname, "monster_rat"))
+		else if ( equali( classname, "monster_rat" ) )
 		{
-			remove_entity(entid);
+			remove_entity( entid );
 			return FMRES_SUPERCEDE;
 		}
-		else if (equali(classname, "monster_leech"))
+		else if ( equali( classname, "monster_leech" ) )
 		{
-			remove_entity(entid);
+			remove_entity( entid );
 			return FMRES_SUPERCEDE;
 		}
-		// Uncomment the lines below if you see that "_dead" entities are blocking entity spawn, breaking maps or something
-		/*
-		else if (equali(classname, "monster_barney_dead"))
+		else if ( equali( classname, "game_score" ) )
 		{
-			remove_entity(entid);
+			remove_entity( entid );
 			return FMRES_SUPERCEDE;
 		}
-		else if (equali(classname, "monster_hevsuit_dead"))
+		else if ( equali( classname, "squadmaker" ) || equali( classname, "monstermaker" ) || equali( classname, "env_xenmaker" ) ) // Check if any of those monsters are on a squad/monster maker
 		{
-			remove_entity(entid);
-			return FMRES_SUPERCEDE;
-		}
-		else if (equali(classname, "monster_hgrunt_dead"))
-		{
-			remove_entity(entid);
-			return FMRES_SUPERCEDE;
-		}
-		else if (equali(classname, "monster_human_grunt_ally_dead"))
-		{
-			remove_entity(entid);
-			return FMRES_SUPERCEDE;
-		}
-		else if (equali(classname, "monster_otis_dead"))
-		{
-			remove_entity(entid);
-			return FMRES_SUPERCEDE;
-		}
-		else if (equali(classname, "monster_scientist_dead"))
-		{
-			remove_entity(entid);
-			return FMRES_SUPERCEDE;
-		}
-		*/
-		else if (equali(classname, "game_score"))
-		{
-			remove_entity(entid);
-			return FMRES_SUPERCEDE;
-		}
-		else if (equali(classname, "squadmaker") || equali(classname, "monstermaker") || equali(classname, "env_xenmaker")) // Check if any of those monsters are on a squad/monster maker
-		{
-			get_kvd(kvd_handle, KV_KeyName, keyname, 31);
-			if (equali(keyname, "monstertype"))
+			get_kvd( kvd_handle, KV_KeyName, keyname, charsmax( keyname ) );
+			if ( equali( keyname, "monstertype" ) )
 			{
-				get_kvd(kvd_handle, KV_Value, value, 31);
-				if (equali(value, "monster_cockroach"))
+				get_kvd( kvd_handle, KV_Value, value, charsmax( value ) );
+				if ( equali( value, "monster_cockroach" ) )
 				{
-					remove_entity(entid);
+					remove_entity( entid );
 					return FMRES_IGNORED;
 				}
-				else if (equali(value, "monster_rat"))
+				else if ( equali( value, "monster_rat" ) )
 				{
-					remove_entity(entid);
+					remove_entity( entid );
 					return FMRES_IGNORED;
 				}
-				else if (equali(value, "monster_leech"))
+				else if ( equali( value, "monster_leech" ) )
 				{
-					remove_entity(entid);
+					remove_entity( entid );
 					return FMRES_IGNORED;
 				}
-				// Same as above, uncomment if maps get drunk or something
-				/*
-				else if (equali(value, "monster_barney_dead"))
-				{
-					remove_entity(entid);
-					return FMRES_IGNORED;
-				}
-				else if (equali(value, "monster_hevsuit_dead"))
-				{
-					remove_entity(entid);
-					return FMRES_IGNORED;
-				}
-				else if (equali(value, "monster_hgrunt_dead"))
-				{
-					remove_entity(entid);
-					return FMRES_IGNORED;
-				}
-				else if (equali(value, "monster_human_grunt_ally_dead"))
-				{
-					remove_entity(entid);
-					return FMRES_IGNORED;
-				}
-				else if (equali(value, "monster_otis_dead"))
-				{
-					remove_entity(entid);
-					return FMRES_IGNORED;
-				}
-				else if (equali(value, "monster_scientist_dead"))
-				{
-					remove_entity(entid);
-					return FMRES_IGNORED;
-				}
-				*/
 			}
 		}
-		else if (equali(classname, "trigger_setcvar"))
+		else if ( equali( classname, "trigger_setcvar" ) )
 		{
-			get_kvd(kvd_handle, KV_KeyName, keyname, 31);
-			if (equali(keyname, "m_iszCVarToChange"))
+			get_kvd( kvd_handle, KV_KeyName, keyname, charsmax( keyname ) );
+			if ( equali( keyname, "m_iszCVarToChange" ) )
 			{
-				get_kvd(kvd_handle, KV_Value, value, 31);
-				if (equali(value, "sk_player_", 10))
+				get_kvd( kvd_handle, KV_Value, value, charsmax( value ) );
+				if ( equali( value, "sk_player_", 10 ) )
 				{
 					// If you have tweaked the SCXPM to allow insane amounts of health and armor (600+)
 					// then you should allow mappers to use their "anti xpmod" to adjust their difficulty as compensation
@@ -193,7 +120,7 @@ public check_entities( entid, kvd_handle )
 					// to disable SCXPM boosts (and still let players level up), or DISABLED to fully turn the xp mod off.
 					
 					// -Giegue
-					remove_entity(entid);
+					remove_entity( entid );
 					return FMRES_IGNORED;
 				}
 			}
@@ -203,34 +130,63 @@ public check_entities( entid, kvd_handle )
 	return FMRES_IGNORED;
 }
 
-public rexp_disable( victim, inflictor, attacker, Float:dmg, dmgbits )
+public GetHUDCVar()
 {
-	// Medkit points are disabled. Disable for wrench repair too
-	if ( !medkitpoints )
+	set_pcvar_num( hudCVar, 3 );
+	
+	new szMapname[ 33 ], szPath[ 65 ];
+	get_mapname( szMapname, charsmax( szMapname ) );
+	formatex( szPath, charsmax( szPath ), "maps/%s.cfg", szMapname );
+	
+	new pPointer = fopen( szPath, "r", true );
+	if ( pPointer )
 	{
-		// Players only
-		if ( attacker >= 1 && attacker <= g_MaxPlayers )
+		new szLine[ 128 ], szCvar[ 33 ], szValue[ 3 ];
+		while ( fgets( pPointer, szLine, charsmax( szLine ) ) )
 		{
-			// !!! Only care if player ally !!!
-			if ( entity_get_int( victim, EV_INT_iuser4 ) == 0 ) // AngelScript updates the entity's pev->iuser4 so AMXX can know about this.
-				return HAM_IGNORED;
-			
-			// Affect wrench repair only
-			if ( get_user_weapon( attacker ) == 20 ) // weapon ID will no longer match if any custom entity is registered
+			parse( szLine, szCvar, charsmax( szCvar ), szValue, charsmax( szValue ) );
+			if ( equal( szCvar, "scxpm_hud_channel" ) )
 			{
-				static Float:flHealth, Float:flMaxHealth;
-				flHealth = entity_get_float( victim, EV_FL_health );
-				flMaxHealth = entity_get_float( victim, EV_FL_max_health );
-				
-				if ( ( flHealth + dmg ) > flMaxHealth )
-					entity_set_float( victim, EV_FL_health, flMaxHealth );
-				else
-					entity_set_float( victim, EV_FL_health, ( flHealth + dmg ) );
-				
-				SetHamParamFloat( 4, 0.0 );
+				set_pcvar_num( hudCVar, str_to_num( szValue ) );
+				break;
 			}
 		}
+		fclose( pPointer );
 	}
 	
-	return HAM_IGNORED;
+	hook_cvar_change( hudCVar, "doRefreshHUD" );
+}
+
+public doRefreshHUD( pCV, old_value, new_value )
+{
+	set_hudmessage( 0, 0, 0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, old_value, 0, { 0, 0, 0, 0 } );
+	show_hudmessage( 0, " " );
+}
+
+/*** EXTRA FIXES ***/
+public addDeath( player )
+{
+	if ( !is_user_connected( player ) )
+		return PLUGIN_HANDLED;
+	
+	if ( is_user_alive( player ) )
+		set_task( 0.1, "addDeathPost", player );
+	
+	return PLUGIN_CONTINUE;
+}
+public addDeathPost( player )
+{
+	if ( !is_user_connected( player ) )
+		return PLUGIN_HANDLED;
+	
+	if ( !is_user_alive( player ) )
+	{
+		new name[ 33 ];
+		get_user_name( player, name, charsmax( name ) );
+		set_pdata_int( player, OFFSET_PLAYER_DEATHS, get_pdata_int( player, OFFSET_PLAYER_DEATHS ) + 1 );
+		
+		client_print( 0, print_notify, "%s committed suicide.", name );
+	}
+	
+	return PLUGIN_HANDLED;
 }
