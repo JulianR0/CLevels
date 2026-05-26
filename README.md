@@ -1,6 +1,6 @@
-## DEPRECATION WARNING
+# DEPRECATED
 
-This old "v3" version of SCXPM will be made obsolete on December, 31st. Please use the updated "v4" version of SCXPM.
+This old "v3" version of SCXPM was discontinued on December 31st, 2023. This branch is kept for archival purposes only. Please use the latest version of SCXPM.
 Old v3.73 save files are compatible with v4 updates. Migration should be possible with ease, but as a good practice, backup your data before updating.
 
 ##
